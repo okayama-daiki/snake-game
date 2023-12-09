@@ -1,4 +1,14 @@
-html {
+@import url("https://fonts.cdnfonts.com/css/sacramento");
+
+* {
   padding: 0;
   margin: 0;
+  user-select: none;
+}
+
+body {
+  background-color: #111111;
+  color: #eeeeee;
+  font-family: "Sacramento", cursive;
+  max-height: 100vh;
 }

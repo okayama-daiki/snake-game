@@ -1,23 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useState } from "react";
+import Lobby from "./components/Lobby";
 
-function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+export default function App() {
+  const [isGameStarted, setIsGameStarted] = useState(false);
+  const toGame = () => setIsGameStarted(true);
 
-  useEffect(() => {
-    if (!canvasRef.current) {
-      return;
-    }
-    const canvas = canvasRef.current;
-    const context = canvas.getContext("2d");
-
-    context;
-  }, [canvasRef]);
-
-  return (
-    <main>
-      <canvas ref={canvasRef} />
-    </main>
-  );
+  return <main>{isGameStarted ? <></> : <Lobby toGame={toGame} />}</main>;
 }
-
-export default App;
