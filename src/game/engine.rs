@@ -9,8 +9,8 @@ use super::snake::Snake;
 use super::view::View;
 
 const MAX_PELLET_COUNT: usize = 5_000;
-const PELLET_REACT_DISTANCE: f64 = 25.;
-const SNAKE_FEED_DISTANCE: f64 = 15.;
+const PELLET_REACT_DISTANCE: f64 = 35.;
+const SNAKE_FEED_DISTANCE: f64 = 20.;
 
 pub struct GameEngine {
     frame_count: u32,
@@ -84,8 +84,8 @@ impl GameEngine {
             for (id, pellet) in self.pellets.iter_mut() {
                 // Draw pellets towards the snake
                 if pellet.position.distance2(&new_head) < PELLET_REACT_DISTANCE.powi(2) {
-                    pellet.position.x += (new_head.x - pellet.position.x) / 5.;
-                    pellet.position.y += (new_head.y - pellet.position.y) / 5.;
+                    pellet.position.x += (new_head.x - pellet.position.x) / 10.;
+                    pellet.position.y += (new_head.y - pellet.position.y) / 10.;
                 }
                 // Eat pellets
                 if pellet.position.distance2(&new_head) < SNAKE_FEED_DISTANCE.powi(2) {
