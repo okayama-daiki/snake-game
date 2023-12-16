@@ -9,6 +9,9 @@ edition = "2021"
 actix = "0.13.1"
 actix-web = "4.4.0"
 actix-web-actors = "4.2.0"
+actix-rt = "*"
 uuid = {version = "1.6.1", features = [ "v4"]}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+rand = "0.8.5"
+rtree_rs = "0.1.4"
