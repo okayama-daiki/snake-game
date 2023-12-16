@@ -157,11 +157,11 @@ export default class GameEngine {
     // update canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(this.offsetCanvas, 0, 0);
-    for (let snake of message.snakes) {
-      this.drawSnake(snake);
-    }
     for (let pellet of message.pellets) {
       this.drawPellet(pellet);
+    }
+    for (let snake of message.snakes) {
+      this.drawSnake(snake);
     }
   }
 }
