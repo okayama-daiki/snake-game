@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
+import GameEngine from "../services/GameEngine";
 import styles from "./Game.module.scss";
+
+const URI = "ws://0.0.0.0:8000";
 
 export default function Game({ toLobby }: { toLobby: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -7,10 +10,10 @@ export default function Game({ toLobby }: { toLobby: () => void }) {
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    new GameEngine(canvas, ctx, URI);
 
     toLobby;
   }, [canvasRef]);
