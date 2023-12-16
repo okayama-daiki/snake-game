@@ -92,13 +92,41 @@ export default class GameEngine {
     this.ctx.fillStyle = snake.color;
     this.ctx.shadowColor = "none";
     this.ctx.shadowBlur = 0;
+    // draw body
     for (let body of snake.bodies.reverse()) {
       const { x, y } = body;
       this.ctx.beginPath();
-      this.ctx.arc(x, y, 10, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, 15, 0, 2 * Math.PI);
       this.ctx.fill();
       this.ctx.closePath();
     }
+    // draw eyes
+    const head = snake.bodies[snake.bodies.length - 1];
+    const close = 45;
+    const radius = 7;
+    const theta = Math.atan2(snake.velocity.y, snake.velocity.x);
+    const eye1 = {
+      x: head.x + Math.cos(theta - close) * radius,
+      y: head.y + Math.sin(theta - close) * radius,
+    };
+    const eye2 = {
+      x: head.x + Math.cos(theta + close) * radius,
+      y: head.y + Math.sin(theta + close) * radius,
+    };
+    this.ctx.fillStyle = "white";
+    this.ctx.beginPath();
+    this.ctx.arc(eye1.x, eye1.y, 4, 0, 2 * Math.PI);
+    this.ctx.fill();
+    this.ctx.arc(eye2.x, eye2.y, 4, 0, 2 * Math.PI);
+    this.ctx.fill();
+    this.ctx.closePath();
+    this.ctx.fillStyle = "black";
+    this.ctx.beginPath();
+    this.ctx.arc(eye1.x, eye1.y, 2, 0, 2 * Math.PI);
+    this.ctx.fill();
+    this.ctx.arc(eye2.x, eye2.y, 2, 0, 2 * Math.PI);
+    this.ctx.fill();
+    this.ctx.closePath();
   }
 
   drawPellet(pellet: Pellet) {
