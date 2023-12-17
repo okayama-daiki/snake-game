@@ -90,8 +90,8 @@ export default class GameEngine {
 
   drawSnake(snake: Snake) {
     this.ctx.fillStyle = snake.color;
-    this.ctx.shadowColor = "none";
-    this.ctx.shadowBlur = 0;
+    this.ctx.shadowColor = "rgb(0, 100, 0)";
+    this.ctx.shadowBlur = 3;
     // draw body
     for (let body of snake.bodies.reverse()) {
       const { x, y } = body;
@@ -140,7 +140,7 @@ export default class GameEngine {
     this.ctx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
     this.ctx.shadowColor = `hsl(${h}, ${s}%, ${l}%)`;
     this.ctx.shadowBlur = size * 10;
-    this.ctx.arc(x, y, size * 2, 0, 2 * Math.PI);
+    this.ctx.arc(x, y, Math.min(size * 2, frame_count_offset), 0, 2 * Math.PI);
     this.ctx.fill();
     this.ctx.closePath();
   }
