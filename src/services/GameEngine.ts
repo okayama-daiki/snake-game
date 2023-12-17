@@ -89,6 +89,10 @@ export default class GameEngine {
   }
 
   drawSnake(snake: Snake) {
+    if (snake.bodies.length === 0) {
+      return;
+    }
+
     this.ctx.fillStyle = snake.color;
     this.ctx.shadowColor = "rgb(0, 100, 0)";
     this.ctx.shadowBlur = 3;
