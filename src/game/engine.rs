@@ -89,7 +89,7 @@ impl GameEngine {
                 }
                 // Eat pellets
                 if pellet.position.distance2(&new_head) < SNAKE_FEED_DISTANCE.powi(2) {
-                    snake.bodies.push_back(new_head.clone());
+                    snake.bodies.push_front(snake.get_head().clone());
                     eaten_pellets.push(*id);
                 }
             }
