@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
             .service(handle_connection)
             .app_data(Data::new(websocket_server.clone()))
     })
-    .bind("0.0.0.0:8000")?
+    .bind("127.0.0.1:8000")?
     .run()
     .await
 }

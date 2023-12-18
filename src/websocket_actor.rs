@@ -16,8 +16,15 @@ struct WindowSize {
     pub height: f64,
 }
 
+struct Session {
+    pub addr: Recipient<WebsocketMessage>,
+    pub is_started: bool,
+    pub window_size: WindowSize,
+    pub center_coordinate: Coordinate,
+}
+
 pub struct WebsocketActor {
-    sessions: HashMap<Uuid, (Recipient<WebsocketMessage>, WindowSize, Coordinate)>,
+    sessions: HashMap<Uuid, Session>,
     engine: GameEngine,
 }
 
@@ -36,20 +43,22 @@ impl Actor for WebsocketActor {
     fn started(&mut self, ctx: &mut Self::Context) {
         ctx.run_interval(FRAME_INTERVAL, |act, _| {
             act.engine.forward();
-            for (id, (client, window, center)) in act.sessions.iter_mut() {
-                if let Some(snake) = act.engine.get_snake(id) {
-                    *center = snake.get_head().clone();
+            for (id, session) in act.sessions.iter_mut() {
+                if session.is_started {
+                    if let Some(snake) = act.engine.get_snake(id) {
+                        session.center_coordinate = snake.get_head().clone();
+                    }
+                    session.addr.do_send(WebsocketMessage(
+                        to_string(&act.engine.view(
+                            id,
+                            session.center_coordinate.x,
+                            session.center_coordinate.y,
+                            session.window_size.width,
+                            session.window_size.height,
+                        ))
+                        .unwrap(),
+                    ));
                 }
-                client.do_send(WebsocketMessage(
-                    to_string(&act.engine.view(
-                        id,
-                        center.x,
-                        center.y,
-                        window.width,
-                        window.height,
-                    ))
-                    .unwrap(),
-                ));
             }
         });
     }
@@ -61,9 +70,13 @@ impl Handler<Connect> for WebsocketActor {
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
         self.sessions.insert(
             msg.id,
-            (msg.addr, WindowSize::default(), Coordinate::default()),
+            Session {
+                addr: msg.addr,
+                is_started: false,
+                window_size: WindowSize::default(),
+                center_coordinate: Coordinate::default(),
+            },
         );
-        self.engine.add_snake(Coordinate { x: 0., y: 0. }, msg.id);
     }
 }
 
@@ -87,6 +100,12 @@ impl Handler<ClientMessage> for WebsocketActor {
         let query = iter.next().unwrap();
 
         match query {
+            "s" => {
+                if self.engine.get_snake(id).is_none() {
+                    self.engine.add_snake(Coordinate::default(), *id);
+                }
+                self.sessions.get_mut(id).unwrap().is_started = true;
+            }
             "v" => {
                 let x = iter.next().unwrap().parse::<f64>().unwrap();
                 let y = iter.next().unwrap().parse::<f64>().unwrap();
@@ -95,9 +114,9 @@ impl Handler<ClientMessage> for WebsocketActor {
             "w" => {
                 let width = iter.next().unwrap().parse::<f64>().unwrap();
                 let height = iter.next().unwrap().parse::<f64>().unwrap();
-                if let Some((_, window, _)) = self.sessions.get_mut(id) {
-                    window.height = height;
-                    window.width = width;
+                if let Some(session) = self.sessions.get_mut(id) {
+                    session.window_size.height = height;
+                    session.window_size.width = width;
                 }
             }
             _ => {}
