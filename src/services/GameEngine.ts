@@ -36,7 +36,7 @@ export default class GameEngine {
   constructor(
     canvas: HTMLCanvasElement,
     ctx: CanvasRenderingContext2D,
-    uri: string
+    socket: WebSocket
   ) {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -55,16 +55,14 @@ export default class GameEngine {
     this.offsetCtx = this.offsetCanvas.getContext("2d")!;
     this.drawBackground();
 
-    this.socket = new WebSocket(uri);
+    this.socket = socket;
+    socket.send("s");
+    socket.send(`w ${this.canvas.width} ${this.canvas.height}`);
 
     this.socket.onmessage = (e) => {
       const message: Message = JSON.parse(e.data);
       console.debug(message);
       this.update(message);
-    };
-
-    this.socket.onopen = () => {
-      this.socket.send(`w ${this.canvas.width} ${this.canvas.height}`);
     };
 
     addEventListener("mousemove", (e) => {
