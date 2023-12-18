@@ -5,6 +5,7 @@ mod websocket_session;
 use actix::{Actor, Addr};
 use actix_web::{get, web::Data, web::Payload, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
+use std::env;
 use websocket_actor::WebsocketActor;
 use websocket_session::WebsocketSession;
 
@@ -21,6 +22,17 @@ pub async fn handle_connection(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenvy::dotenv().ok();
+
+    let host = match env::var("HOST") {
+        Ok(val) => val,
+        Err(_e) => "0.0.0.0".to_string(),
+    };
+    let port = match env::var("PORT") {
+        Ok(val) => val,
+        Err(_e) => "8000".to_string(),
+    };
+
     let websocket_server = WebsocketActor::default().start();
 
     HttpServer::new(move || {
@@ -28,7 +40,7 @@ async fn main() -> std::io::Result<()> {
             .service(handle_connection)
             .app_data(Data::new(websocket_server.clone()))
     })
-    .bind("127.0.0.1:8000")?
+    .bind(format!("{}:{}", host, port))?
     .run()
     .await
 }
