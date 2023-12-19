@@ -53,6 +53,25 @@ impl GameEngine {
     }
 
     pub fn remove_snake(&mut self, id: &Uuid) {
+        if let Some(snake) = self.snakes.get(id) {
+            for body in snake.bodies.iter() {
+                if rand::thread_rng().gen_range(0..=10) < 5 {
+                    let body = body.clone();
+                    let dx = rand::thread_rng().gen_range((-10.)..=10.);
+                    let dy = rand::thread_rng().gen_range((-10.)..=10.);
+                    let pellet = Pellet::new_with_color_and_size(
+                        Coordinate {
+                            x: body.x + dx,
+                            y: body.y + dy,
+                        },
+                        "120".to_string(),
+                        3,
+                    );
+                    let id = Uuid::new_v4();
+                    self.pellets.insert(id, pellet);
+                }
+            }
+        }
         self.snakes.remove(id);
     }
 
@@ -124,7 +143,7 @@ impl GameEngine {
         }
 
         for id in dead_snakes.iter() {
-            self.snakes.remove(id);
+            self.remove_snake(id)
         }
 
         // Refill pellets

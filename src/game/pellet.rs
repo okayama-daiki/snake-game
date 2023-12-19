@@ -31,6 +31,19 @@ impl Pellet {
         }
     }
 
+    pub fn new_with_color_and_size(
+        initial_position: Coordinate,
+        color: String,
+        size: u8,
+    ) -> Pellet {
+        Pellet {
+            position: initial_position,
+            size,
+            color,
+            frame_count_offset: 0,
+        }
+    }
+
     pub fn clone(&self) -> Pellet {
         Pellet {
             position: self.position.clone(),
