@@ -181,7 +181,7 @@ export default class GameEngine {
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         this.mapCtx.beginPath();
-        this.mapCtx.fillStyle = `rgba(255, 255, 255, ${map[y][x] / 10} )`;
+        this.mapCtx.fillStyle = `rgba(255, 255, 255, ${map[x][y] / 10} )`;
         this.mapCtx.arc(x, y, 1, 0, 2 * Math.PI);
         this.mapCtx.fill();
         this.mapCtx.closePath();
