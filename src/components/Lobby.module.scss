@@ -1,3 +1,5 @@
+@import url("https://fonts.cdnfonts.com/css/sacramento");
+
 @keyframes loading {
   50% {
     opacity: 0;
@@ -43,18 +45,18 @@
 }
 
 .title {
+  font-family: "Sacramento", cursive;
   font-size: 4rem;
   font-weight: 500;
   margin-bottom: 1rem;
 }
 
 .message {
+  font-size: 1rem;
   display: flex;
   flex-direction: row;
   align-items: end;
   gap: 3px;
-  font-family: "Courier New", Courier, monospace;
-  font-weight: 300;
   margin: 1rem;
 }
 
