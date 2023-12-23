@@ -10,22 +10,24 @@ use uuid::Uuid;
 const FPS: u64 = 30;
 const FRAME_INTERVAL: Duration = Duration::from_millis(1000 / FPS);
 
+type Precision = f32;
+
 #[derive(Default)]
 struct WindowSize {
-    pub width: f64,
-    pub height: f64,
+    pub width: u16,
+    pub height: u16,
 }
 
 struct Session {
     pub addr: Recipient<WebsocketMessage>,
     pub is_started: bool,
     pub window_size: WindowSize,
-    pub center_coordinate: Coordinate,
+    pub center_coordinate: Coordinate<Precision>,
 }
 
 pub struct WebsocketActor {
     sessions: HashMap<Uuid, Session>,
-    engine: GameEngine,
+    engine: GameEngine<Precision>,
 }
 
 impl Default for WebsocketActor {
@@ -53,8 +55,8 @@ impl Actor for WebsocketActor {
                             id,
                             session.center_coordinate.x,
                             session.center_coordinate.y,
-                            session.window_size.width,
-                            session.window_size.height,
+                            session.window_size.width.into(),
+                            session.window_size.height.into(),
                         ))
                         .unwrap(),
                     ));
@@ -107,13 +109,13 @@ impl Handler<ClientMessage> for WebsocketActor {
                 self.sessions.get_mut(id).unwrap().is_started = true;
             }
             "v" => {
-                let x = iter.next().unwrap().parse::<f64>().unwrap();
-                let y = iter.next().unwrap().parse::<f64>().unwrap();
+                let x = iter.next().unwrap().parse::<Precision>().unwrap();
+                let y = iter.next().unwrap().parse::<Precision>().unwrap();
                 self.engine.change_velocity(id, Coordinate { x, y });
             }
             "w" => {
-                let width = iter.next().unwrap().parse::<f64>().unwrap();
-                let height = iter.next().unwrap().parse::<f64>().unwrap();
+                let width = iter.next().unwrap().parse::<u16>().unwrap();
+                let height = iter.next().unwrap().parse::<u16>().unwrap();
                 if let Some(session) = self.sessions.get_mut(id) {
                     session.window_size.height = height;
                     session.window_size.width = width;

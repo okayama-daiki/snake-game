@@ -4,8 +4,8 @@ use super::pellet::Pellet;
 use super::snake::Snake;
 
 #[derive(Serialize)]
-pub struct View {
+pub struct View<T> {
     pub is_alive: bool,
-    pub snakes: Vec<Snake>,
-    pub pellets: Vec<Pellet>,
+    pub snakes: Vec<Snake<T>>,
+    pub pellets: Vec<Pellet<T>>,
 }
