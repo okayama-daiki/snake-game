@@ -45,8 +45,8 @@ where
         self.snakes.get(id)
     }
 
-    pub fn add_snake(&mut self, initial_position: Coordinate<T>, id: Uuid) {
-        let snake: Snake<T> = Snake::new(initial_position, 5.0.into());
+    pub fn add_snake(&mut self, id: Uuid) {
+        let snake: Snake<T> = Snake::new(self.get_random_coordinate(), 5.0.into());
         self.snakes.insert(id, snake);
     }
 

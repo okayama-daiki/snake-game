@@ -104,7 +104,7 @@ impl Handler<ClientMessage> for WebsocketActor {
         match query {
             "s" => {
                 if self.engine.get_snake(id).is_none() {
-                    self.engine.add_snake(Coordinate::default(), *id);
+                    self.engine.add_snake(*id);
                 }
                 self.sessions.get_mut(id).unwrap().is_started = true;
             }
