@@ -13,7 +13,11 @@ pub struct Snake<T> {
     pub frame_count_offset: u32,
 }
 
-impl<T: Float> Snake<T> {
+impl<T> Snake<T>
+where
+    T: Float,
+    f32: Into<T>,
+{
     pub fn new(initial_position: Coordinate<T>, initial_speed: T) -> Snake<T> {
         Snake {
             bodies: VecDeque::from([

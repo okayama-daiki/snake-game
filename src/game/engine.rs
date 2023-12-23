@@ -8,6 +8,7 @@ use super::coordinate::Coordinate;
 use super::pellet::Pellet;
 use super::snake::Snake;
 use super::view::View;
+use super::FIELD_SIZE;
 
 const MAX_PELLET_COUNT: usize = 5_000;
 const PELLET_REACT_DISTANCE: f32 = 30.;
@@ -17,8 +18,6 @@ pub struct GameEngine<T> {
     frame_count: u32,
     snakes: HashMap<Uuid, Snake<T>>,
     pellets: HashMap<Uuid, Pellet<T>>,
-    min: Coordinate<T>,
-    max: Coordinate<T>,
 }
 
 impl<T> GameEngine<T>
@@ -31,22 +30,14 @@ where
             frame_count: 0,
             snakes: HashMap::new(),
             pellets: HashMap::new(),
-            min: Coordinate {
-                x: (-5000.0).into(),
-                y: (-5000.0).into(),
-            },
-            max: Coordinate {
-                x: 5000.0.into(),
-                y: 5000.0.into(),
-            },
         }
     }
 
     pub fn get_random_coordinate(&self) -> Coordinate<T> {
         let rx = rand::thread_rng().gen_range((0.0)..=1.0);
         let ry = rand::thread_rng().gen_range((0.0)..=1.0);
-        let x = self.min.x + (self.max.x - self.min.x) * rx.into();
-        let y = self.min.y + (self.max.y - self.min.y) * ry.into();
+        let x = FIELD_SIZE.into() * rx.into();
+        let y = FIELD_SIZE.into() * ry.into();
         Coordinate { x, y }
     }
 
@@ -98,8 +89,10 @@ where
         for (_, snake) in self.snakes.iter_mut() {
             let head = snake.get_head();
             let new_head = Coordinate {
-                x: head.x + snake.velocity.x * snake.speed,
-                y: head.y + snake.velocity.y * snake.speed,
+                x: (head.x + snake.velocity.x * snake.speed + FIELD_SIZE.into())
+                    % FIELD_SIZE.into(),
+                y: (head.y + snake.velocity.y * snake.speed + FIELD_SIZE.into())
+                    % FIELD_SIZE.into(),
             };
 
             snake.bodies.pop_back();
@@ -132,13 +125,6 @@ where
 
         for (id, snake) in self.snakes.iter() {
             let head = snake.get_head();
-            if head.x < self.min.x
-                || head.x > self.max.x
-                || head.y < self.min.y
-                || head.y > self.max.y
-            {
-                dead_snakes.push(*id);
-            }
             for (id2, snake2) in self.snakes.iter() {
                 if id == id2 {
                     continue;
@@ -184,12 +170,15 @@ where
         }
     }
 
-    pub fn view(&self, id: &Uuid, x: T, y: T, width: T, height: T) -> View<T> {
+    pub fn view(&self, id: &Uuid, cx: T, cy: T, width: T, height: T) -> View<T> {
+        //! Get the view of the game.
+        //! The view is centered at (cx, cy) with width and height.
+
         let mut snakes: Vec<Snake<T>> = Vec::new();
         let mut pellets: Vec<Pellet<T>> = Vec::new();
 
-        let x0 = x - width / 2.0.into();
-        let y0 = y - height / 2.0.into();
+        let x0 = cx - width / 2.0.into();
+        let y0 = cy - height / 2.0.into();
 
         for (_, snake) in self.snakes.iter() {
             let snake = snake.clone();
@@ -198,8 +187,8 @@ where
                 if body.is_in_rectangle(x0, y0, width, height) {
                     let body = body.clone();
                     bodies.push_back(Coordinate {
-                        x: body.x - x0,
-                        y: body.y - y0,
+                        x: (body.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        y: (body.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
                     });
                 }
             }
@@ -211,13 +200,15 @@ where
                 let pellet = pellet.clone();
                 pellets.push(Pellet {
                     position: Coordinate {
-                        x: pellet.position.x - x0,
-                        y: pellet.position.y - y0,
+                        x: (pellet.position.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        y: (pellet.position.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
                     },
                     ..pellet
                 });
             }
         }
+
+        let cell_size = FIELD_SIZE / 100.0;
 
         View {
             is_alive: self.snakes.contains_key(id),

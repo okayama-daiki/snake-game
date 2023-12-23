@@ -22,7 +22,11 @@ pub struct Pellet<T> {
     pub frame_count_offset: u32,
 }
 
-impl<T: Float> Pellet<T> {
+impl<T> Pellet<T>
+where
+    T: Float,
+    f32: Into<T>,
+{
     pub fn new(initial_position: Coordinate<T>) -> Pellet<T> {
         Pellet {
             position: initial_position,
