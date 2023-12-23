@@ -22,6 +22,12 @@ type Message = {
   isAlive: boolean;
   snakes: Snake[];
   pellets: Pellet[];
+  map: number[][];
+  self_coordinate: [number, number];
+};
+
+const clamp = (min: number, x: number, max: number) => {
+  return Math.min(Math.max(x, min), max);
 };
 
 export default class GameEngine {
@@ -29,9 +35,12 @@ export default class GameEngine {
   ctx: CanvasRenderingContext2D;
   offsetCanvas: HTMLCanvasElement;
   offsetCtx: CanvasRenderingContext2D;
+  mapCanvas: HTMLCanvasElement;
+  mapCtx: CanvasRenderingContext2D;
   socket: WebSocket;
   mouseX: number = 0;
   mouseY: number = 0;
+  frameCount: number = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -49,11 +58,17 @@ export default class GameEngine {
 
     this.canvas = canvas;
     this.ctx = ctx;
+
     this.offsetCanvas = document.createElement("canvas");
     this.offsetCanvas.width = canvas.width;
     this.offsetCanvas.height = canvas.height;
     this.offsetCtx = this.offsetCanvas.getContext("2d")!;
     this.drawBackground();
+
+    this.mapCanvas = document.createElement("canvas");
+    this.mapCanvas.width = 100;
+    this.mapCanvas.height = 100;
+    this.mapCtx = this.mapCanvas.getContext("2d")!;
 
     this.socket = socket;
     socket.send("s");
@@ -69,6 +84,8 @@ export default class GameEngine {
       this.mouseX = e.clientX;
       this.mouseY = e.clientY;
     });
+
+    this.frameCount = 0;
   }
 
   drawBackground() {
@@ -147,6 +164,45 @@ export default class GameEngine {
     this.ctx.closePath();
   }
 
+  updateMap(map: number[][], selfCoordinate: [number, number]) {
+    const width = map.length;
+    const height = map[0].length;
+    const cellSize = 1;
+
+    const mapWidth = width * cellSize;
+    const mapHeight = height * cellSize;
+
+    this.mapCanvas.width = 100;
+    this.mapCanvas.height = 100;
+
+    this.mapCtx.fillStyle = "#111";
+    this.mapCtx.fillRect(0, 0, mapWidth, mapHeight);
+
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        this.mapCtx.beginPath();
+        this.mapCtx.fillStyle = `rgba(255, 255, 255, ${map[y][x] / 10} )`;
+        this.mapCtx.arc(x, y, 1, 0, 2 * Math.PI);
+        this.mapCtx.fill();
+        this.mapCtx.closePath();
+      }
+    }
+
+    this.mapCtx.moveTo(width / 2, 0);
+    this.mapCtx.lineTo(width / 2, height);
+    this.mapCtx.moveTo(0, height / 2);
+    this.mapCtx.lineTo(width, height / 2);
+    this.mapCtx.strokeStyle = "white";
+    this.mapCtx.lineWidth = 0.5;
+    this.mapCtx.stroke();
+
+    this.mapCtx.beginPath();
+    this.mapCtx.fillStyle = "green";
+    this.mapCtx.arc(selfCoordinate[0], selfCoordinate[1], 3, 0, 2 * Math.PI);
+    this.mapCtx.fill();
+    this.mapCtx.closePath();
+  }
+
   update(message: Message) {
     // update velocity
     const dx = this.mouseX - this.canvas.width / 2;
@@ -165,5 +221,20 @@ export default class GameEngine {
     for (let snake of message.snakes) {
       this.drawSnake(snake);
     }
+
+    // draw map
+    const mapSize = clamp(70, this.canvas.width / 10, 100);
+    const offset = clamp(20, this.canvas.width / 20, 50);
+    this.updateMap(message.map, message.self_coordinate);
+    this.ctx.shadowBlur = 0;
+    this.ctx.drawImage(
+      this.mapCanvas,
+      this.canvas.width - mapSize - offset,
+      this.canvas.height - mapSize - offset,
+      mapSize,
+      mapSize
+    );
+
+    this.frameCount++;
   }
 }
