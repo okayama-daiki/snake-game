@@ -8,4 +8,6 @@ pub struct View<T> {
     pub is_alive: bool,
     pub snakes: Vec<Snake<T>>,
     pub pellets: Vec<Pellet<T>>,
+    pub map: Vec<Vec<u8>>,
+    pub self_coordinate: (usize, usize),
 }

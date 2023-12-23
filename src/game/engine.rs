@@ -214,6 +214,30 @@ where
             is_alive: self.snakes.contains_key(id),
             snakes,
             pellets,
+            map: self.compress(),
+            self_coordinate: (
+                (cx.to_f32().unwrap() / cell_size).floor() as usize,
+                (cy.to_f32().unwrap() / cell_size).floor() as usize,
+            ),
         }
+    }
+
+    pub fn compress(&self) -> Vec<Vec<u8>> {
+        //! 100x100 array
+        let mut arr = vec![vec![0; 100]; 100];
+        let cell_size = FIELD_SIZE / 100.0;
+        for (_, snake) in self.snakes.iter() {
+            for body in snake.bodies.iter() {
+                let x = (body.x.to_f32().unwrap() / cell_size).floor() as usize;
+                let y = (body.y.to_f32().unwrap() / cell_size).floor() as usize;
+                arr[x][y] += 1;
+            }
+        }
+        for (_, pellet) in self.pellets.iter() {
+            let x = (pellet.position.x.to_f32().unwrap() / cell_size).floor() as usize;
+            let y = (pellet.position.y.to_f32().unwrap() / cell_size).floor() as usize;
+            arr[x][y] += 1;
+        }
+        arr
     }
 }
