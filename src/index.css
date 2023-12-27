@@ -4,9 +4,12 @@
   user-select: none;
 }
 
+html {
+  overscroll-behavior: none;
+}
+
 body {
   background-color: #111111;
   color: #eeeeee;
   font-family: Cambria, Cochin, Georgia, Times, "Times New Roman", serif;
-  max-height: 100vh;
 }
