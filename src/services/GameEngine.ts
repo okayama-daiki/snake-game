@@ -15,6 +15,7 @@ type Snake = {
   speed: number;
   color: string;
   velocity: Coordinate;
+  size: number;
   frame_count_offset: number;
 };
 
@@ -115,7 +116,7 @@ export default class GameEngine {
     for (let body of snake.bodies.reverse()) {
       const { x, y } = body;
       this.ctx.beginPath();
-      this.ctx.arc(x, y, 15, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, snake.size, 0, 2 * Math.PI);
       this.ctx.fill();
       this.ctx.closePath();
     }
