@@ -17,9 +17,7 @@ export default function Game({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    new GameEngine(canvas, ctx, socket);
-
-    toLobby;
+    new GameEngine(canvas, ctx, socket, toLobby);
   }, [canvasRef]);
 
   return (

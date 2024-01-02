@@ -20,7 +20,7 @@ type Snake = {
 };
 
 type Message = {
-  isAlive: boolean;
+  is_alive: boolean;
   snakes: Snake[];
   pellets: Pellet[];
   map: number[][];
@@ -43,10 +43,16 @@ export default class GameEngine {
   mouseY: number = 0;
   frameCount: number = 0;
 
+  toLobby: () => void;
+
+  isAlive: boolean = true;
+  preIsAlive: boolean = true;
+
   constructor(
     canvas: HTMLCanvasElement,
     ctx: CanvasRenderingContext2D,
-    socket: WebSocket
+    socket: WebSocket,
+    toLobby: () => void
   ) {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -87,6 +93,10 @@ export default class GameEngine {
     });
 
     this.frameCount = 0;
+
+    this.toLobby = toLobby;
+    this.preIsAlive = true;
+    this.isAlive = true;
   }
 
   drawBackground() {
@@ -205,6 +215,25 @@ export default class GameEngine {
   }
 
   update(message: Message) {
+    this.preIsAlive = this.isAlive;
+    this.isAlive = message.is_alive;
+
+    if (this.preIsAlive && !this.isAlive) {
+      let alpha = 100;
+      setInterval(() => {
+        this.ctx.globalAlpha = alpha / 100;
+        alpha -= 1;
+      }, 3000 / 100);
+      setTimeout(() => {
+        if (this.isAlive === true) return;
+        this.toLobby();
+      }, 3000);
+    }
+
+    if (this.isAlive) {
+      this.ctx.globalAlpha = 1;
+    }
+
     // update velocity
     const dx = this.mouseX - this.canvas.width / 2;
     const dy = this.mouseY - this.canvas.height / 2;
