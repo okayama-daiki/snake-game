@@ -20,7 +20,8 @@ struct WindowSize {
 
 struct Session {
     pub addr: Recipient<WebsocketMessage>,
-    pub is_started: bool,
+    pub is_playing: bool,
+    pub additional_send_frame_count: u32, // after died, send additional frames
     pub window_size: WindowSize,
     pub center_coordinate: Coordinate<Precision>,
 }
@@ -46,10 +47,16 @@ impl Actor for WebsocketActor {
         ctx.run_interval(FRAME_INTERVAL, |act, _| {
             act.engine.forward();
             for (id, session) in act.sessions.iter_mut() {
-                if session.is_started {
-                    if let Some(snake) = act.engine.get_snake(id) {
-                        session.center_coordinate = snake.get_head().clone();
-                    }
+                if let Some(snake) = act.engine.get_snake(id) {
+                    session.center_coordinate = snake.get_head().clone();
+                    session.additional_send_frame_count = 240;
+                }
+                if act.engine.get_snake(id).is_none() && session.is_playing {
+                    session.is_playing = false;
+                }
+
+                if session.additional_send_frame_count > 0 {
+                    session.additional_send_frame_count -= 1;
                     session.addr.do_send(WebsocketMessage(
                         to_string(&act.engine.view(
                             id,
@@ -74,7 +81,8 @@ impl Handler<Connect> for WebsocketActor {
             msg.id,
             Session {
                 addr: msg.addr,
-                is_started: false,
+                is_playing: false,
+                additional_send_frame_count: 0,
                 window_size: WindowSize::default(),
                 center_coordinate: Coordinate::default(),
             },
@@ -106,7 +114,7 @@ impl Handler<ClientMessage> for WebsocketActor {
                 if self.engine.get_snake(id).is_none() {
                     self.engine.add_snake(*id);
                 }
-                self.sessions.get_mut(id).unwrap().is_started = true;
+                self.sessions.get_mut(id).unwrap().is_playing = true;
             }
             "v" => {
                 let x = iter.next().unwrap().parse::<Precision>().unwrap();
