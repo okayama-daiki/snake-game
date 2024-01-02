@@ -118,6 +118,8 @@ where
             for id in eaten_pellets.iter() {
                 self.pellets.remove(id);
             }
+
+            snake.size = 15 + snake.bodies.len() / 50;
         }
 
         // Detect collision

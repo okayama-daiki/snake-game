@@ -10,6 +10,7 @@ pub struct Snake<T> {
     pub speed: T,
     pub color: String,
     pub velocity: Coordinate<T>,
+    pub size: usize,
     pub frame_count_offset: u32,
 }
 
@@ -28,6 +29,7 @@ where
                 initial_position.clone(),
             ]),
             speed: initial_speed,
+            size: 15,
             color: "green".to_string(),
             velocity: Coordinate {
                 x: T::one(),
@@ -45,6 +47,7 @@ where
         Snake {
             bodies,
             speed: self.speed,
+            size: self.size,
             color: self.color.clone(),
             velocity: self.velocity.clone(),
             frame_count_offset: self.frame_count_offset,
