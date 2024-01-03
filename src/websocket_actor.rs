@@ -62,8 +62,8 @@ impl Actor for WebsocketActor {
                             id,
                             session.center_coordinate.x,
                             session.center_coordinate.y,
-                            session.window_size.width.into(),
-                            session.window_size.height.into(),
+                            (session.window_size.width + 100).into(),
+                            (session.window_size.height + 100).into(),
                         ))
                         .unwrap(),
                     ));

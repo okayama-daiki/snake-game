@@ -21,14 +21,12 @@ where
     f32: Into<T>,
 {
     pub fn new(initial_position: Coordinate<T>, initial_speed: T) -> Snake<T> {
+        let mut bodies = VecDeque::new();
+        for _ in 0..10 {
+            bodies.push_back(initial_position.clone());
+        }
         Snake {
-            bodies: VecDeque::from([
-                initial_position.clone(),
-                initial_position.clone(),
-                initial_position.clone(),
-                initial_position.clone(),
-                initial_position.clone(),
-            ]),
+            bodies: bodies,
             acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
