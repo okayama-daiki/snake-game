@@ -45,6 +45,10 @@ where
         self.snakes.get(id)
     }
 
+    pub fn get_snake_mut(&mut self, id: &Uuid) -> Option<&mut Snake<T>> {
+        self.snakes.get_mut(id)
+    }
+
     pub fn add_snake(&mut self, id: Uuid) {
         let snake: Snake<T> = Snake::new(self.get_random_coordinate(), 5.0.into());
         self.snakes.insert(id, snake);
@@ -87,12 +91,21 @@ where
 
         // Update snakes
         for (_, snake) in self.snakes.iter_mut() {
+            let mut accelerate_factor = T::one();
+
+            if snake.acceleration_time_left > 0 {
+                snake.acceleration_time_left -= 1;
+                accelerate_factor = T::from(2).unwrap();
+            }
+
             let head = snake.get_head();
             let new_head = Coordinate {
-                x: (head.x + snake.velocity.x * snake.speed + FIELD_SIZE.into())
-                    % FIELD_SIZE.into(),
-                y: (head.y + snake.velocity.y * snake.speed + FIELD_SIZE.into())
-                    % FIELD_SIZE.into(),
+                x: head.x + snake.velocity.x * snake.speed * accelerate_factor,
+                y: head.y + snake.velocity.y * snake.speed * accelerate_factor,
+            };
+            let new_head = Coordinate {
+                x: (new_head.x + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                y: (new_head.y + FIELD_SIZE.into()) % FIELD_SIZE.into(),
             };
 
             snake.bodies.pop_back();

@@ -7,6 +7,7 @@ use super::coordinate::Coordinate;
 #[derive(Serialize)]
 pub struct Snake<T> {
     pub bodies: VecDeque<Coordinate<T>>, // head, ..., tail
+    pub acceleration_time_left: u32,
     pub speed: T,
     pub color: String,
     pub velocity: Coordinate<T>,
@@ -28,6 +29,7 @@ where
                 initial_position.clone(),
                 initial_position.clone(),
             ]),
+            acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
             color: "green".to_string(),
@@ -46,6 +48,7 @@ where
         }
         Snake {
             bodies,
+            acceleration_time_left: self.acceleration_time_left,
             speed: self.speed,
             size: self.size,
             color: self.color.clone(),
@@ -56,5 +59,15 @@ where
 
     pub fn get_head(&self) -> &Coordinate<T> {
         &self.bodies[0]
+    }
+
+    pub fn accelerate(&mut self) {
+        if self.bodies.len() < 20 {
+            return;
+        }
+        for _ in 0..5 {
+            self.bodies.pop_back();
+        }
+        self.acceleration_time_left = 60;
     }
 }

@@ -116,6 +116,9 @@ impl Handler<ClientMessage> for WebsocketActor {
                 }
                 self.sessions.get_mut(id).unwrap().is_playing = true;
             }
+            "a" => {
+                self.engine.get_snake_mut(id).unwrap().accelerate();
+            }
             "v" => {
                 let x = iter.next().unwrap().parse::<Precision>().unwrap();
                 let y = iter.next().unwrap().parse::<Precision>().unwrap();
