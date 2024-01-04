@@ -92,6 +92,11 @@ export default class GameEngine {
       this.mouseY = e.clientY;
     });
 
+    addEventListener("click", () => {
+      if (!this.isAlive) return;
+      this.socket.send("a");
+    });
+
     this.frameCount = 0;
 
     this.toLobby = toLobby;
