@@ -114,10 +114,14 @@ impl Handler<ClientMessage> for WebsocketActor {
                 if self.engine.get_snake(id).is_none() {
                     self.engine.add_snake(*id);
                 }
-                self.sessions.get_mut(id).unwrap().is_playing = true;
+                if let Some(snake) = self.sessions.get_mut(id) {
+                    snake.is_playing = true;
+                }
             }
             "a" => {
-                self.engine.get_snake_mut(id).unwrap().accelerate();
+                if let Some(snake) = self.engine.get_snake_mut(id) {
+                    snake.accelerate();
+                }
             }
             "v" => {
                 let x = iter.next().unwrap().parse::<Precision>().unwrap();
