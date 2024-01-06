@@ -12,6 +12,7 @@ type Pellet = {
 
 type Snake = {
   bodies: Coordinate[];
+  acceleration_time_left: number;
   speed: number;
   color: string;
   velocity: Coordinate;
@@ -125,8 +126,9 @@ export default class GameEngine {
     }
 
     this.ctx.fillStyle = snake.color;
-    this.ctx.shadowColor = "rgb(0, 100, 0)";
-    this.ctx.shadowBlur = 3;
+    this.ctx.shadowColor =
+      snake.acceleration_time_left > 0 ? snake.color : "rgb(0, 100, 0)";
+    this.ctx.shadowBlur = clamp(3, snake.acceleration_time_left, 15);
     // draw body
     for (let body of snake.bodies.reverse()) {
       const { x, y } = body;
