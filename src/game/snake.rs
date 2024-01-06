@@ -26,7 +26,7 @@ where
             bodies.push_back(initial_position.clone());
         }
         Snake {
-            bodies: bodies,
+            bodies,
             acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
@@ -62,9 +62,6 @@ where
     pub fn accelerate(&mut self) {
         if self.bodies.len() < 20 {
             return;
-        }
-        for _ in 0..5 {
-            self.bodies.pop_back();
         }
         self.acceleration_time_left = 60;
     }

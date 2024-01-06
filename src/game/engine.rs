@@ -108,6 +108,16 @@ where
                 y: (new_head.y + FIELD_SIZE.into()) % FIELD_SIZE.into(),
             };
 
+            if snake.acceleration_time_left % 10 == 1 {
+                self.pellets.insert(
+                    Uuid::new_v4(),
+                    Pellet::new_with_color_and_size(
+                        snake.bodies.pop_back().unwrap(),
+                        "120".to_string(),
+                        3,
+                    ),
+                );
+            }
             snake.bodies.pop_back();
             snake.bodies.push_front(new_head.clone());
 
