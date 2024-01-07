@@ -64,6 +64,13 @@ If the backend server is not ready, you can get from [here](https://github.com/o
 echo VITE_WSS_URI="<URI of backend server>" > .env.local
 ```
 
+After setting up the server, install the necessary dependencies.
+
+```bash
+wasm-pack build --target web
+npm install
+```
+
 ## Tech Stack
 
 ### Frontend

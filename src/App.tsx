@@ -3,8 +3,11 @@ import Lobby from "./components/Lobby";
 import Game from "./components/Game";
 import ErrorModal from "./components/Modal/Error";
 import { ConnectionStatus, PlayerStatus } from "./types";
+import init from "render-engine";
 
 const socket = new WebSocket(import.meta.env.VITE_WSS_URI);
+
+init();
 
 export default function App() {
   const [playerStatus, setPlayerStatus] = useState(PlayerStatus.NOT_PLAYING);

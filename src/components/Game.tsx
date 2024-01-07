@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import GameEngine from "../services/GameEngine";
+import { RenderEngine } from "render-engine";
 import styles from "./Game.module.scss";
 
 export default function Game({
@@ -17,7 +17,7 @@ export default function Game({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    new GameEngine(canvas, ctx, socket, toLobby);
+    new RenderEngine(canvas, ctx, socket, toLobby);
   }, [canvasRef]);
 
   return (
