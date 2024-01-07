@@ -10,11 +10,20 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
+console_error_panic_hook= "0.1"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 
 [dependencies.web-sys]
 version = "0.3"
-features = [
+features = [ # Ref: https://rustwasm.github.io/wasm-bindgen/api/web_sys/
+  "console",
+  "Window",
   "HtmlCanvasElement",
   "CanvasRenderingContext2d",
   "WebSocket",
+  "MessageEvent"
 ]
+
+[target."cfg(debug_assertions)".dpendencies]
+console_error_panic_hook = "0.1"
