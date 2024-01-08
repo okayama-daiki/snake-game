@@ -46,6 +46,12 @@ pub fn get_context(canvas: &HtmlCanvasElement) -> CanvasRenderingContext2d {
 }
 
 pub fn create_mouse_position_getter() -> Box<dyn Fn() -> Coordinate> {
+    //! Returns a getter function that returns the current mouse position.
+    //!
+    //! Since there is no property like window.mouse_location, the mouse position
+    //! can be declared within this function, rewritten by the event handler, and
+    //! read through the getter in the return value.
+
     let mouse_position = Coordinate { x: 0., y: 0. };
     let mouse_position = Rc::new(Cell::new(mouse_position));
     let window = window().unwrap();
