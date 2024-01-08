@@ -14,10 +14,8 @@ export default function Game({
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    const engine = new RenderEngine(canvas, ctx, socket, toLobby);
+    const engine = new RenderEngine(canvas, socket, toLobby);
     engine.init();
   }, [canvasRef]);
 
