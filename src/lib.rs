@@ -1,27 +1,17 @@
 mod types;
-
 use types::{Coordinate, Map, Message, Pellet, Snake};
 #[macro_use]
 mod browser;
-
-#[allow(unused_imports)]
-use anyhow::{anyhow, Result};
-#[allow(unused_imports)]
 use browser::{
     canvas, create_mouse_position_getter, get_center_coordinate, get_context, get_height,
     get_width, window,
 };
-
-#[allow(unused_imports)]
+use std::cell::Cell;
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
-    JsCast, UnwrapThrowExt,
+    JsCast,
 };
-#[allow(unused_imports)]
-use web_sys::{
-    console, js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent,
-    MouseEvent, WebSocket,
-};
+use web_sys::{js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
@@ -60,8 +50,6 @@ impl RenderEngine {
         self.canvas.set_height(get_height());
         self.canvas.set_width(get_width());
 
-        let mut context = get_context(&self.canvas);
-
         // 2. Add a resize event handler to the window so that the canvas dynamically resizes and sends it to the server.
         {
             let socket = self.socket.clone();
@@ -81,19 +69,39 @@ impl RenderEngine {
 
         // 3. Add a message handler to the websocket so that render is called when a message is received.
         {
+            let is_alive = Cell::new(true);
+            let frame_after_death = Cell::new(0);
             let socket = self.socket.clone();
+            let context = get_context(&self.canvas);
+            let callback = self.callback.clone();
             let get_mouse_position = create_mouse_position_getter();
             let on_message = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
                 // 3.1. Parse the message into a Message struct and render the Message.
                 let message: Message =
                     serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
-                render(&mut context, message);
 
-                // 3.2. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
-                let dir = vector(&get_center_coordinate(), &get_mouse_position());
-                socket
-                    .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
-                    .ok();
+                // 3.2. if the snake is dead, gradually darken the screen and call the callback function when the screen is completely dark.
+                if !message.is_alive && is_alive.get() {
+                    is_alive.set(false);
+                    frame_after_death.set(1);
+                }
+                if !is_alive.get() {
+                    frame_after_death.set(frame_after_death.get() + 1);
+                }
+                if frame_after_death.get() == 150 {
+                    callback.call0(&JsValue::NULL).unwrap();
+                }
+                context
+                    .set_global_alpha(1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.);
+                render(&context, &message);
+
+                // 3.3. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
+                if is_alive.get() {
+                    let dir = vector(&get_center_coordinate(), &get_mouse_position());
+                    socket
+                        .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
+                        .ok();
+                }
             }) as Box<dyn FnMut(web_sys::MessageEvent)>);
             self.socket
                 .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
@@ -120,14 +128,33 @@ impl RenderEngine {
     }
 }
 
-fn render(context: &mut CanvasRenderingContext2d, message: Message) {
+fn render(context: &CanvasRenderingContext2d, message: &Message) {
     context.clear_rect(0.0, 0.0, get_width() as f64, get_height() as f64);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
     render_map(context, &message.map);
 }
 
-fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
+fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
+    for pellet in pellets {
+        context.set_fill_style(&JsValue::from_str(&pellet.hsl()));
+        context.set_shadow_color(pellet.hsl().as_str());
+        context.set_shadow_blur(pellet.size * 10.);
+        context.begin_path();
+        context
+            .arc(
+                pellet.position.x,
+                pellet.position.y,
+                pellet.radius(),
+                0.0,
+                std::f64::consts::PI * 2.0,
+            )
+            .unwrap();
+        context.fill();
+    }
+}
+
+fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     for snake in snakes {
         // Draw the body
         context.set_fill_style(&JsValue::from_str(&snake.color));
@@ -209,26 +236,7 @@ fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     }
 }
 
-fn render_pellets(context: &mut CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
-    for pellet in pellets {
-        context.set_fill_style(&JsValue::from_str(&pellet.hsl()));
-        context.set_shadow_color(pellet.hsl().as_str());
-        context.set_shadow_blur(pellet.size * 10.);
-        context.begin_path();
-        context
-            .arc(
-                pellet.position.x,
-                pellet.position.y,
-                pellet.radius(),
-                0.0,
-                std::f64::consts::PI * 2.0,
-            )
-            .unwrap();
-        context.fill();
-    }
-}
-
-fn render_map(context: &mut CanvasRenderingContext2d, map: &Map) {
+fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
     // NOTE: Based on the assumption that map is a 100*100 two-dimensional array
     const MAP_SIZE: u32 = 100;
 
