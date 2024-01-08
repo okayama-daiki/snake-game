@@ -39,10 +39,15 @@ pub struct Snake {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Map {
+    pub map: Vec<Vec<u32>>,
+    pub self_coordinate: [usize; 2],
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Message {
     pub is_alive: bool,
     pub snakes: Vec<Snake>,
     pub pellets: Vec<Pellet>,
-    pub map: Vec<Vec<u32>>,
-    pub self_coordinate: [usize; 2],
+    pub map: Map,
 }
