@@ -7,6 +7,7 @@ use browser::{
     get_width, window,
 };
 use std::cell::Cell;
+use std::rc::Rc;
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
     JsCast,
@@ -111,13 +112,37 @@ impl RenderEngine {
         // 4. Add a mousedown handler to the window so that the snake can accelerate when the window is clicked.
         {
             let socket = self.socket.clone();
-            let on_mousedown = Closure::wrap(Box::new(move || {
-                socket.send_with_str("a").ok();
+            let is_mousedown = Rc::new(Cell::new(false));
+            let is_mousedown_for_mousedown = is_mousedown.clone();
+            let is_mousedown_for_mouseup = is_mousedown.clone();
+            let interval_callback = Closure::wrap(Box::new(move || {
+                if is_mousedown.get() {
+                    socket.send_with_str("a").ok();
+                }
             }) as Box<dyn FnMut()>);
             window()
                 .unwrap()
+                .set_interval_with_callback_and_timeout_and_arguments_0(
+                    interval_callback.as_ref().unchecked_ref(),
+                    100,
+                )
+                .unwrap();
+            interval_callback.forget();
+            let on_mousedown = Closure::wrap(Box::new(move || {
+                is_mousedown_for_mousedown.set(true);
+            }) as Box<dyn FnMut()>);
+            let on_mouseup = Closure::wrap(Box::new(move || {
+                is_mousedown_for_mouseup.set(false);
+            }) as Box<dyn FnMut()>);
+
+            window()
+                .unwrap()
                 .set_onmousedown(Some(on_mousedown.as_ref().unchecked_ref()));
+            window()
+                .unwrap()
+                .set_onmouseup(Some(on_mouseup.as_ref().unchecked_ref()));
             on_mousedown.forget();
+            on_mouseup.forget();
         }
 
         // 5. Finally, send a start message to the server, and start the game.
