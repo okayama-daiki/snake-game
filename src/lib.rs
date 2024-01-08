@@ -100,16 +100,16 @@ impl RenderEngine {
             on_message.forget();
         }
 
-        // 4. Add a click handler to the window so that the snake can accelerate when the window is clicked.
+        // 4. Add a mousedown handler to the window so that the snake can accelerate when the window is clicked.
         {
             let socket = self.socket.clone();
-            let on_click = Closure::wrap(Box::new(move || {
+            let on_mousedown = Closure::wrap(Box::new(move || {
                 socket.send_with_str("a").ok();
             }) as Box<dyn FnMut()>);
             window()
                 .unwrap()
-                .set_onclick(Some(on_click.as_ref().unchecked_ref()));
-            on_click.forget();
+                .set_onmousedown(Some(on_mousedown.as_ref().unchecked_ref()));
+            on_mousedown.forget();
         }
 
         // 5. Finally, send a start message to the server, and start the game.
