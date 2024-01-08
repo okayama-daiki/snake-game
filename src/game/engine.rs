@@ -1,7 +1,8 @@
 use rand::Rng;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 // TODO: Consider using BuildHasher trait
 use num_traits::Float;
+use std::cmp::Ordering;
 use uuid::Uuid;
 
 use super::coordinate::Coordinate;
@@ -12,8 +13,6 @@ use super::view::View;
 use super::FIELD_SIZE;
 
 const MAX_PELLET_COUNT: usize = 5_000;
-const PELLET_REACT_DISTANCE: f32 = 30.;
-const SNAKE_FEED_DISTANCE: f32 = 20.;
 
 pub struct GameEngine<T> {
     frame_count: u32,
@@ -126,14 +125,15 @@ where
 
             for (id, pellet) in self.pellets.iter_mut() {
                 // Draw pellets towards the snake
-                if pellet.position.distance2(&new_head) < PELLET_REACT_DISTANCE.powi(2).into() {
-                    let nx = pellet.position.x + (new_head.x - pellet.position.x) / 7f32.into();
-                    let ny = pellet.position.y + (new_head.y - pellet.position.y) / 7f32.into();
+                if pellet.position.distance2(&new_head) < T::from((snake.size * 2).pow(2)).unwrap()
+                {
+                    let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5f32.into();
+                    let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5f32.into();
                     pellet.position = Coordinate { x: nx, y: ny };
                 }
 
                 // Eat pellets
-                if pellet.position.distance2(&new_head) < SNAKE_FEED_DISTANCE.powi(2).into() {
+                if pellet.position.distance2(&new_head) < T::from(snake.size.pow(2)).unwrap() {
                     snake.bodies.push_front(snake.get_head().clone());
                     eaten_pellets.push(*id);
                 }
@@ -143,21 +143,56 @@ where
                 self.pellets.remove(id);
             }
 
-            snake.size = 15 + snake.bodies.len() / 50;
+            snake.size = (15 + snake.bodies.len() / 50).min(40);
         }
 
         // Detect collision
-        let mut dead_snakes: Vec<Uuid> = Vec::new();
+        let mut dead_snakes: HashSet<Uuid> = HashSet::new();
 
-        for (id, snake) in self.snakes.iter() {
-            let head = snake.get_head();
+        for (id1, snake1) in self.snakes.iter() {
             for (id2, snake2) in self.snakes.iter() {
-                if id == id2 {
+                if id1 == id2 {
                     continue;
                 }
-                for body in snake2.bodies.iter() {
-                    if head.distance2(body) < SNAKE_FEED_DISTANCE.powi(2).into() {
-                        dead_snakes.push(*id);
+                let head1 = snake1.get_head();
+                let head2 = snake2.get_head();
+
+                // the head to head collision, rules:
+                // 1. the acceleration snake wins
+                // 2. the bigger snake wins
+                // 3. random
+                if head1.distance2(head2) <= T::from((snake1.size + snake2.size).pow(2)).unwrap() {
+                    if snake1.acceleration_time_left > 0 && snake2.acceleration_time_left > 0
+                        || snake1.acceleration_time_left == 0 && snake2.acceleration_time_left == 0
+                    {
+                        match snake1.size.cmp(&snake2.size) {
+                            Ordering::Greater => {
+                                dead_snakes.insert(*id2);
+                            }
+                            Ordering::Less => {
+                                dead_snakes.insert(*id1);
+                            }
+                            Ordering::Equal => {
+                                if rand::thread_rng().gen_range(0..=10) < 5 {
+                                    dead_snakes.insert(*id1);
+                                } else {
+                                    dead_snakes.insert(*id2);
+                                }
+                            }
+                        }
+                    } else if snake2.acceleration_time_left > 0 {
+                        dead_snakes.insert(*id1);
+                    } else {
+                        dead_snakes.insert(*id2);
+                    }
+                    continue;
+                }
+
+                for body2 in snake2.bodies.iter() {
+                    if head1.distance2(body2)
+                        <= T::from((snake1.size + snake2.size).pow(2)).unwrap()
+                    {
+                        dead_snakes.insert(*id1);
                     }
                 }
             }
