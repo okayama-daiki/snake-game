@@ -55,28 +55,50 @@ impl RenderEngine {
 
     pub fn init(&mut self) {
         console_error_panic_hook::set_once();
+
         // 1. Set the canvas size to the window size.
         self.canvas.set_height(get_height());
         self.canvas.set_width(get_width());
 
         let mut context = get_context(&self.canvas);
 
-        let get_mouse_position = create_mouse_position_getter();
+        // 2. Add a resize event handler to the window so that the canvas dynamically resizes and sends it to the server.
+        {
+            let socket = self.socket.clone();
+            let canvas = self.canvas.clone();
+            let on_resize = Closure::wrap(Box::new(move || {
+                canvas.set_height(get_height());
+                canvas.set_width(get_width());
+                socket
+                    .send_with_str(format!("w {} {}", get_width(), get_height()).as_str())
+                    .ok();
+            }) as Box<dyn FnMut()>);
+            window()
+                .unwrap()
+                .set_onresize(Some(on_resize.as_ref().unchecked_ref()));
+            on_resize.forget();
+        }
 
-        // 3. Add a message handler to the websocket, so that render is called when a message is received.
-        let socket = self.socket.clone();
-        let on_message = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
-            let message: Message = serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
-            render(&mut context, message);
+        // 3. Add a message handler to the websocket so that render is called when a message is received.
+        {
+            let socket = self.socket.clone();
+            let get_mouse_position = create_mouse_position_getter();
+            let on_message = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+                // 3.1. Parse the message into a Message struct and render the Message.
+                let message: Message =
+                    serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
+                render(&mut context, message);
 
-            let direction = vector(&get_center_coordinate(), &get_mouse_position());
-            socket
-                .send_with_str(format!("v {} {}", direction.x, direction.y).as_str())
-                .ok();
-        }) as Box<dyn FnMut(web_sys::MessageEvent)>);
-        self.socket
-            .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-        on_message.forget();
+                // 3.2. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
+                let dir = vector(&get_center_coordinate(), &get_mouse_position());
+                socket
+                    .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
+                    .ok();
+            }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+            self.socket
+                .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+            on_message.forget();
+        }
 
         // 4. Finally, send a start message to the server, and start the game.
         self.socket
