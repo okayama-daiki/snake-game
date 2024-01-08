@@ -129,6 +129,7 @@ fn render(context: &mut CanvasRenderingContext2d, message: Message) {
 
 fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     for snake in snakes {
+        // Draw the body
         context.set_fill_style(&JsValue::from_str(&snake.color));
         context.set_shadow_color(if snake.acceleration_time_left == 0 {
             "rgb(0, 100, 0)"
@@ -149,6 +150,58 @@ fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
                     snake.size as f64,
                     0.0,
                     std::f64::consts::PI * 2.0,
+                )
+                .unwrap();
+            context.fill();
+        }
+
+        // Draw the face
+        if let Some(head) = snake.bodies.first() {
+            let theta = snake.velocity.y.atan2(snake.velocity.x);
+            context.restore();
+            context.set_fill_style(&JsValue::from_str("#fff"));
+            context.begin_path();
+            context
+                .arc(
+                    head.x + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
+                    head.y + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
+                    snake.size as f64 * 0.3,
+                    0.,
+                    std::f64::consts::PI * 2.,
+                )
+                .unwrap();
+            context.fill();
+            context.begin_path();
+            context
+                .arc(
+                    head.x + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
+                    head.y + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
+                    snake.size as f64 * 0.3,
+                    0.,
+                    std::f64::consts::PI * 2.,
+                )
+                .unwrap();
+            context.fill();
+            context.set_fill_style(&JsValue::from_str("#000"));
+            context.begin_path();
+            context
+                .arc(
+                    head.x + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
+                    head.y + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
+                    snake.size as f64 * 0.15,
+                    0.,
+                    std::f64::consts::PI * 2.,
+                )
+                .unwrap();
+            context.fill();
+            context.begin_path();
+            context
+                .arc(
+                    head.x + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
+                    head.y + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
+                    snake.size as f64 * 0.15,
+                    0.,
+                    std::f64::consts::PI * 2.,
                 )
                 .unwrap();
             context.fill();
