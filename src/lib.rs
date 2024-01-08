@@ -100,14 +100,20 @@ impl RenderEngine {
             on_message.forget();
         }
 
-        // 4. Finally, send a start message to the server, and start the game.
-        self.socket
-            .send_with_str("s")
-            .map_err(|e| {
-                console::log_1(&e);
-                e
-            })
-            .ok();
+        // 4. Add a click handler to the window so that the snake can accelerate when the window is clicked.
+        {
+            let socket = self.socket.clone();
+            let on_click = Closure::wrap(Box::new(move || {
+                socket.send_with_str("a").ok();
+            }) as Box<dyn FnMut()>);
+            window()
+                .unwrap()
+                .set_onclick(Some(on_click.as_ref().unchecked_ref()));
+            on_click.forget();
+        }
+
+        // 5. Finally, send a start message to the server, and start the game.
+        self.socket.send_with_str("s").ok();
         self.socket
             .send_with_str(format!("w {} {}", self.canvas.width(), self.canvas.height()).as_str())
             .ok();
