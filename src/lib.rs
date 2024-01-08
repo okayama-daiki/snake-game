@@ -130,8 +130,16 @@ fn render(context: &mut CanvasRenderingContext2d, message: Message) {
 fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     for snake in snakes {
         context.set_fill_style(&JsValue::from_str(&snake.color));
-        context.set_shadow_color("rgb(0, 100, 0)");
-        context.set_shadow_blur(3.);
+        context.set_shadow_color(if snake.acceleration_time_left == 0 {
+            "rgb(0, 100, 0)"
+        } else {
+            snake.color.as_str()
+        });
+        context.set_shadow_blur(if snake.acceleration_time_left == 0 {
+            3.
+        } else {
+            (snake.acceleration_time_left as f64 / 7.).sin().abs() * 15.
+        });
         for body in snake.bodies.iter().rev() {
             context.begin_path();
             context
