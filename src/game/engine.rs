@@ -247,21 +247,22 @@ where
         }
     }
 
-    pub fn compress(&self) -> Vec<Vec<u8>> {
+    pub fn compress(&self) -> Vec<Vec<u32>> {
         //! 100x100 array
-        let mut arr = vec![vec![0; 100]; 100];
-        let cell_size = FIELD_SIZE / 100.0;
+        const SIZE: usize = 100;
+        let mut arr = vec![vec![0; SIZE]; SIZE];
+        let cell_size = FIELD_SIZE / SIZE as f32;
         for (_, snake) in self.snakes.iter() {
             for body in snake.bodies.iter() {
                 let x = (body.x.to_f32().unwrap() / cell_size).floor() as usize;
                 let y = (body.y.to_f32().unwrap() / cell_size).floor() as usize;
-                arr[x][y] += 1;
+                arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
             }
         }
         for (_, pellet) in self.pellets.iter() {
             let x = (pellet.position.x.to_f32().unwrap() / cell_size).floor() as usize;
             let y = (pellet.position.y.to_f32().unwrap() / cell_size).floor() as usize;
-            arr[x][y] += 1;
+            arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
         }
         arr
     }
