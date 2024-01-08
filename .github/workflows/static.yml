@@ -29,6 +29,14 @@ jobs:
         with:
           node-version: 18
           cache: "npm"
+      - name: Install wasm-pack
+        uses: actions-rs/install@v0.1
+        with:
+          crate: wasm-pack
+          version: 0.9.1
+          use-tool-cache: true
+      - name: Build wasm
+        run: wasm-pack build --target web
       - name: Install dependencies
         run: npm install
       - name: Build
