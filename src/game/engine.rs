@@ -5,6 +5,7 @@ use num_traits::Float;
 use uuid::Uuid;
 
 use super::coordinate::Coordinate;
+use super::map::Map;
 use super::pellet::Pellet;
 use super::snake::Snake;
 use super::view::View;
@@ -205,6 +206,7 @@ where
         let x0 = cx - width / 2.0.into();
         let y0 = cy - height / 2.0.into();
 
+        // 1. Get snakes in the rectangle
         for (_, snake) in self.snakes.iter() {
             let snake = snake.clone();
             let mut bodies: VecDeque<Coordinate<T>> = VecDeque::new();
@@ -220,6 +222,7 @@ where
             snakes.push(Snake { bodies, ..snake });
         }
 
+        // 2. Get pellets in the rectangle
         for (_, pellet) in self.pellets.iter() {
             if pellet.position.is_in_rectangle(x0, y0, width, height) {
                 let pellet = pellet.clone();
@@ -233,25 +236,12 @@ where
             }
         }
 
-        let cell_size = FIELD_SIZE / 100.0;
-
-        View {
-            is_alive: self.snakes.contains_key(id),
-            snakes,
-            pellets,
-            map: self.compress(),
-            self_coordinate: (
-                (cx.to_f32().unwrap() / cell_size).floor() as usize,
-                (cy.to_f32().unwrap() / cell_size).floor() as usize,
-            ),
-        }
-    }
-
-    pub fn compress(&self) -> Vec<Vec<u32>> {
-        //! 100x100 array
+        // 3. Create the map
         const SIZE: usize = 100;
-        let mut arr = vec![vec![0; SIZE]; SIZE];
         let cell_size = FIELD_SIZE / SIZE as f32;
+
+        // TODO: `arr` is the same for all users on every frame. Consider caching the value.
+        let mut arr = vec![vec![0; SIZE]; SIZE];
         for (_, snake) in self.snakes.iter() {
             for body in snake.bodies.iter() {
                 let x = (body.x.to_f32().unwrap() / cell_size).floor() as usize;
@@ -264,6 +254,22 @@ where
             let y = (pellet.position.y.to_f32().unwrap() / cell_size).floor() as usize;
             arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
         }
-        arr
+
+        let self_coordinate = (
+            (cx.to_f32().unwrap() / cell_size).floor() as usize,
+            (cy.to_f32().unwrap() / cell_size).floor() as usize,
+        );
+
+        let map = Map {
+            map: arr,
+            self_coordinate,
+        };
+
+        View {
+            is_alive: self.snakes.contains_key(id),
+            snakes,
+            pellets,
+            map,
+        }
     }
 }
