@@ -75,14 +75,15 @@ npm install
 
 ### Frontend
 
-- [Vite]() -
-- [React]() -
-- [WebSocket API]() -
+- [Vite](https://vitejs.dev) - Build tool that aims to provide a faster and leaner development experience for modern web projects
+- [React](https://react.dev) - The library for web and native user interfaces
+- [wasm-pack](https://github.com/rustwasm/wasm-pack) - A one-stop shop for building and working with rust- generated WebAssembly
+- [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) - Facilitating high-level interactions between Wasm modules and JavaScript
 
 ### Backend
 
-- [Actix Web](https://actix.rs/) -
+- [Actix Web](https://actix.rs) - A powerful, pragmatic, and extremely fast web framework for Rust
 
 ## Credit and references
 
-- [slither.io](https://slither.io/) -
+- [slither.io](https://slither.io/) - A smash hit multiplayer online video game
