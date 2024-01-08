@@ -19,6 +19,16 @@ pub fn get_width() -> u32 {
     window().unwrap().inner_width().unwrap().as_f64().unwrap() as u32
 }
 
+pub fn canvas() -> Result<HtmlCanvasElement> {
+    window()?
+        .document()
+        .unwrap()
+        .create_element("canvas")
+        .unwrap()
+        .dyn_into::<HtmlCanvasElement>()
+        .map_err(|_| anyhow!("No Canvas Found"))
+}
+
 pub fn get_center_coordinate() -> Coordinate {
     Coordinate {
         x: get_width() as f64 / 2.,

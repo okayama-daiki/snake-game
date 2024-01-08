@@ -1,5 +1,6 @@
 mod types;
-use types::{Coordinate, Message, Pellet, Snake};
+
+use types::{Coordinate, Map, Message, Pellet, Snake};
 #[macro_use]
 mod browser;
 
@@ -7,7 +8,8 @@ mod browser;
 use anyhow::{anyhow, Result};
 #[allow(unused_imports)]
 use browser::{
-    create_mouse_position_getter, get_center_coordinate, get_context, get_height, get_width, window,
+    canvas, create_mouse_position_getter, get_center_coordinate, get_context, get_height,
+    get_width, window,
 };
 
 #[allow(unused_imports)]
@@ -94,6 +96,7 @@ fn render(context: &mut CanvasRenderingContext2d, message: Message) {
     context.clear_rect(0.0, 0.0, get_width() as f64, get_height() as f64);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
+    render_map(context, &message.map);
 }
 
 fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
@@ -118,7 +121,6 @@ fn render_snakes(context: &mut CanvasRenderingContext2d, snakes: &Vec<Snake>) {
 }
 
 fn render_pellets(context: &mut CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
-    console::log_1(&JsValue::from_str("Rendering pellets"));
     for pellet in pellets {
         context.set_fill_style(&JsValue::from_str(&pellet.hsl()));
         context.set_shadow_color(pellet.hsl().as_str());
@@ -135,6 +137,66 @@ fn render_pellets(context: &mut CanvasRenderingContext2d, pellets: &Vec<Pellet>)
             .unwrap();
         context.fill();
     }
+}
+
+fn render_map(context: &mut CanvasRenderingContext2d, map: &Map) {
+    // NOTE: Based on the assumption that map is a 100*100 two-dimensional array
+    const MAP_SIZE: u32 = 100;
+
+    let sub_canvas = canvas().unwrap();
+    sub_canvas.set_height(MAP_SIZE);
+    sub_canvas.set_width(MAP_SIZE);
+    let sub_context = get_context(&sub_canvas);
+
+    // Draw the map
+    for x in 0..MAP_SIZE as usize {
+        for y in 0..MAP_SIZE as usize {
+            sub_context.begin_path();
+            sub_context.set_fill_style(&JsValue::from_str(
+                format!("rgba(255, 255, 255, {})", map.map[x][y] as f32 / 10.).as_str(),
+            ));
+            sub_context.fill_rect(x as f64, y as f64, 1., 1.);
+        }
+    }
+
+    // Draw the coordinate axis
+    sub_context.set_stroke_style(&JsValue::from_str("#fff"));
+    sub_context.set_line_width(0.5);
+    sub_context.begin_path();
+    sub_context.move_to(MAP_SIZE as f64 / 2., 0.);
+    sub_context.line_to(MAP_SIZE as f64 / 2., MAP_SIZE as f64);
+    sub_context.move_to(0., MAP_SIZE as f64 / 2.);
+    sub_context.line_to(MAP_SIZE as f64, MAP_SIZE as f64 / 2.);
+    sub_context.stroke();
+
+    // Draw the self coordinate
+    sub_context.set_fill_style(&JsValue::from_str("green"));
+    sub_context.begin_path();
+    sub_context
+        .arc(
+            map.self_coordinate[0] as f64,
+            map.self_coordinate[1] as f64,
+            3.,
+            0.,
+            std::f64::consts::PI * 2.,
+        )
+        .unwrap();
+    sub_context.fill();
+
+    // Paste the sub canvas to the main canvas
+    let responsive_size = (get_width() as f64 / 20.).clamp(70., 100.);
+    let margin = (get_width() as f64 / 10.).clamp(20., 50.);
+
+    context.set_shadow_blur(0.);
+    context
+        .draw_image_with_html_canvas_element_and_dw_and_dh(
+            &sub_canvas,
+            get_width() as f64 - responsive_size - margin,
+            get_height() as f64 - responsive_size - margin,
+            responsive_size,
+            responsive_size,
+        )
+        .unwrap();
 }
 
 fn vector(a: &Coordinate, b: &Coordinate) -> Coordinate {
