@@ -14,6 +14,8 @@ use wasm_bindgen::{
 };
 use web_sys::{js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
 
+static GLOBAL_MARGIN: f64 = 50.;
+
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
 #[allow(unused_macros)]
@@ -50,6 +52,9 @@ impl RenderEngine {
         // 1. Set the canvas size to the window size.
         self.canvas.set_height(get_height());
         self.canvas.set_width(get_width());
+        get_context(&self.canvas)
+            .translate(-GLOBAL_MARGIN, -GLOBAL_MARGIN)
+            .unwrap();
 
         // 2. Add a resize event handler to the window so that the canvas dynamically resizes and sends it to the server.
         {
@@ -58,6 +63,9 @@ impl RenderEngine {
             let on_resize = Closure::wrap(Box::new(move || {
                 canvas.set_height(get_height());
                 canvas.set_width(get_width());
+                get_context(&canvas)
+                    .translate(-GLOBAL_MARGIN, -GLOBAL_MARGIN)
+                    .unwrap();
                 socket
                     .send_with_str(format!("w {} {}", get_width(), get_height()).as_str())
                     .ok();
@@ -154,7 +162,12 @@ impl RenderEngine {
 }
 
 fn render(context: &CanvasRenderingContext2d, message: &Message) {
-    context.clear_rect(0.0, 0.0, get_width() as f64, get_height() as f64);
+    context.clear_rect(
+        0.0,
+        0.0,
+        (get_width() + 100) as f64,
+        (get_height() + 100) as f64,
+    );
     render_background(context, &message.background_dots);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
@@ -315,8 +328,8 @@ fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
     context
         .draw_image_with_html_canvas_element_and_dw_and_dh(
             &sub_canvas,
-            get_width() as f64 - responsive_size - margin,
-            get_height() as f64 - responsive_size - margin,
+            get_width() as f64 - responsive_size - margin + GLOBAL_MARGIN,
+            get_height() as f64 - responsive_size - margin + GLOBAL_MARGIN,
             responsive_size,
             responsive_size,
         )
