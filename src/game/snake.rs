@@ -13,6 +13,7 @@ pub struct Snake<T> {
     pub velocity: Coordinate<T>,
     pub size: usize,
     pub frame_count_offset: u32,
+    pub is_visible_head: bool, // for rendering
 }
 
 impl<T> Snake<T>
@@ -36,6 +37,7 @@ where
                 y: T::zero(),
             },
             frame_count_offset: 0,
+            is_visible_head: true,
         }
     }
 
@@ -52,6 +54,7 @@ where
             color: self.color.clone(),
             velocity: self.velocity.clone(),
             frame_count_offset: self.frame_count_offset,
+            is_visible_head: self.is_visible_head,
         }
     }
 

@@ -254,7 +254,12 @@ where
                     });
                 }
             }
-            snakes.push(Snake { bodies, ..snake });
+            let is_visible_head = snake.bodies[0].is_in_rectangle(x0, y0, width, height);
+            snakes.push(Snake {
+                bodies,
+                is_visible_head,
+                ..snake
+            });
         }
 
         // 2. Get pellets in the rectangle
