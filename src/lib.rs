@@ -155,6 +155,7 @@ impl RenderEngine {
 
 fn render(context: &CanvasRenderingContext2d, message: &Message) {
     context.clear_rect(0.0, 0.0, get_width() as f64, get_height() as f64);
+    render_background(context, &message.background_dots);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
     render_map(context, &message.map);
@@ -319,6 +320,17 @@ fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
             responsive_size,
         )
         .unwrap();
+}
+
+fn render_background(context: &CanvasRenderingContext2d, background_dots: &Vec<Coordinate>) {
+    context.set_fill_style(&JsValue::from_str("#222"));
+    for dot in background_dots {
+        context.begin_path();
+        context
+            .arc(dot.x, dot.y, 30., 0.0, std::f64::consts::PI * 2.0)
+            .unwrap();
+        context.fill();
+    }
 }
 
 fn vector(a: &Coordinate, b: &Coordinate) -> Coordinate {

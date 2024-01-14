@@ -49,5 +49,6 @@ pub struct Message {
     pub is_alive: bool,
     pub snakes: Vec<Snake>,
     pub pellets: Vec<Pellet>,
+    pub background_dots: Vec<Coordinate>,
     pub map: Map,
 }
