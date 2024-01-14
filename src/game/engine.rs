@@ -300,10 +300,29 @@ where
             self_coordinate,
         };
 
+        // 4. Get background_dots in the rectangle
+        let mut background_dots: Vec<Coordinate<T>> = Vec::new();
+
+        for x in 0..100 {
+            for y in 0..100 {
+                let hex = Coordinate {
+                    x: ((x * 100) as f32).into(),
+                    y: ((y * 100) as f32).into(),
+                };
+                if hex.is_in_rectangle(x0, y0, width, height) {
+                    background_dots.push(Coordinate {
+                        x: (hex.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        y: (hex.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                    });
+                }
+            }
+        }
+
         View {
             is_alive: self.snakes.contains_key(id),
             snakes,
             pellets,
+            background_dots,
             map,
         }
     }
