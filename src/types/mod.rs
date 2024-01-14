@@ -36,6 +36,7 @@ pub struct Snake {
     pub velocity: Coordinate,
     pub size: u32,
     pub frame_count_offset: u32,
+    pub is_visible_head: bool,
 }
 
 #[derive(Serialize, Deserialize)]

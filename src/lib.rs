@@ -209,7 +209,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
         }
 
         // Draw the face
-        if let Some(head) = snake.bodies.first() {
+        if snake.is_visible_head {
+            let head = snake.bodies.first().unwrap();
             let theta = snake.velocity.y.atan2(snake.velocity.x);
             context.restore();
             context.set_fill_style(&JsValue::from_str("#fff"));
