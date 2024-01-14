@@ -108,7 +108,7 @@ where
                 y: (new_head.y + FIELD_SIZE.into()) % FIELD_SIZE.into(),
             };
 
-            if snake.acceleration_time_left % 10 == 1 {
+            if snake.acceleration_time_left > 0 && snake.frame_count_offset % 6 == 0 {
                 self.pellets.insert(
                     Uuid::new_v4(),
                     Pellet::new_with_color_and_size(
