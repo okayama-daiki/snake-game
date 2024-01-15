@@ -134,7 +134,7 @@ where
 
                 // Eat pellets
                 if pellet.position.distance2(&new_head) < T::from(snake.size.pow(2)).unwrap() {
-                    snake.bodies.push_front(snake.get_head().clone());
+                    snake.bodies.push_back(snake.get_tail().clone());
                     eaten_pellets.push(*id);
                 }
             }

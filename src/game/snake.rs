@@ -62,6 +62,10 @@ where
         &self.bodies[0]
     }
 
+    pub fn get_tail(&self) -> &Coordinate<T> {
+        &self.bodies[self.bodies.len() - 1]
+    }
+
     pub fn accelerate(&mut self) {
         if self.bodies.len() < 20 {
             return;
