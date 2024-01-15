@@ -130,6 +130,8 @@ where
                     let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5f32.into();
                     let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5f32.into();
                     pellet.position = Coordinate { x: nx, y: ny };
+                } else {
+                    pellet.update();
                 }
 
                 // Eat pellets
