@@ -197,17 +197,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     for snake in snakes {
         // Draw the body
 
-        context.set_fill_style(&JsValue::from_str(&snake.color));
-        context.set_shadow_color(if snake.acceleration_time_left == 0 {
-            "rgb(0, 100, 0)"
-        } else {
-            snake.color.as_str()
-        });
-        context.set_shadow_blur(if snake.acceleration_time_left == 0 {
-            3.
-        } else {
-            (snake.acceleration_time_left as f64 / 7.).sin().abs() * 15.
-        });
+        let hsl = snake.hsl();
 
         for body in snake.bodies.iter().rev() {
             context.set_fill_style(&JsValue::from_str("rgba(0, 0, 0, 0.3)"));
@@ -224,12 +214,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
                 )
                 .unwrap();
             context.fill();
-            context.set_fill_style(&JsValue::from_str(&snake.color));
-            context.set_shadow_color(if snake.acceleration_time_left == 0 {
-                "rgb(0, 100, 0)"
-            } else {
-                snake.color.as_str()
-            });
+            context.set_fill_style(&JsValue::from_str(hsl.as_str()));
+            context.set_shadow_color(hsl.as_str());
             context.set_shadow_blur(if snake.acceleration_time_left == 0 {
                 3.
             } else {

@@ -39,6 +39,12 @@ pub struct Snake {
     pub is_visible_head: bool,
 }
 
+impl Snake {
+    pub fn hsl(&self) -> String {
+        format!("hsl({}, 100%, 40%)", self.color)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Map {
     pub map: Vec<Vec<u32>>,
