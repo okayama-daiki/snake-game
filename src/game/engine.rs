@@ -66,7 +66,7 @@ where
                             x: body.x + dx,
                             y: body.y + dy,
                         },
-                        "120".to_string(),
+                        snake.color.clone(),
                         3,
                     );
                     let id = Uuid::new_v4();
@@ -113,7 +113,7 @@ where
                     Uuid::new_v4(),
                     Pellet::new_with_color_and_size(
                         snake.bodies.pop_back().unwrap(),
-                        "120".to_string(),
+                        snake.color.clone(),
                         3,
                     ),
                 );

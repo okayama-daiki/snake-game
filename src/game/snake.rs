@@ -1,8 +1,19 @@
 use num_traits::Float;
+use rand::Rng;
 use serde::Serialize;
 use std::collections::VecDeque;
 
 use super::coordinate::Coordinate;
+
+const COLORS: [&str; 7] = [
+    "8",   // red
+    "120", // green
+    "240", // blue
+    "60",  // yellow
+    "30",  // orange
+    "300", // purple
+    "330", // pink
+];
 
 #[derive(Serialize)]
 pub struct Snake<T> {
@@ -31,7 +42,7 @@ where
             acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
-            color: "green".to_string(),
+            color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
             velocity: Coordinate {
                 x: T::one(),
                 y: T::zero(),
