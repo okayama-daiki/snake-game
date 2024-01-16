@@ -26,8 +26,7 @@
     src="https://img.shields.io/badge/Rust-black?logo=rust&logoColor=#E57324"
   />
   <img
-    src="https://img.shields.io/badge/actix-web?color=%23111
-"
+    src="https://img.shields.io/badge/WebAssembly-654FF0?logo=WebAssembly&logoColor=white"
   />
   <img
     src="https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white"
