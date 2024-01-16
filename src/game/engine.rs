@@ -89,6 +89,8 @@ where
     pub fn forward(&mut self) {
         //! Forward one frame of the game.
 
+        let mut touched_pellets: HashSet<Uuid> = HashSet::new();
+
         // Update snakes
         for (_, snake) in self.snakes.iter_mut() {
             let mut accelerate_factor = T::one();
@@ -130,8 +132,7 @@ where
                     let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5f32.into();
                     let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5f32.into();
                     pellet.position = Coordinate { x: nx, y: ny };
-                } else {
-                    pellet.update();
+                    touched_pellets.insert(*id);
                 }
 
                 // Eat pellets
@@ -208,7 +209,10 @@ where
         self.fill_pellet();
 
         // Update time to live
-        for (_, pellet) in self.pellets.iter_mut() {
+        for (id, pellet) in self.pellets.iter_mut() {
+            if !touched_pellets.contains(id) {
+                pellet.update();
+            }
             pellet.frame_count_offset += 1;
         }
         for (_, snake) in self.snakes.iter_mut() {
