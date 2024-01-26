@@ -36,6 +36,7 @@ async fn main() -> std::io::Result<()> {
 
     let websocket_server = WebsocketActor::default().start();
 
+    println!("Starting server on {}:{}", host, port);
     if std::env::var("PRIVATE_KEY_FILE").is_err()
         || std::env::var("CERTIFICATE_CHAIN_FILE").is_err()
     {

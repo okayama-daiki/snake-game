@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { RenderEngine } from "render-engine";
+import { RenderEngine } from "renderer";
 import styles from "./Game.module.scss";
 
 export default function Game({

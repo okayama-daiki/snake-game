@@ -27,6 +27,3 @@ features = [ # Ref: https://rustwasm.github.io/wasm-bindgen/api/web_sys/
   "MessageEvent",
   "MouseEvent",
 ]
-
-[target."cfg(debug_assertions)".dpendencies]
-console_error_panic_hook = "0.1"

@@ -25,7 +25,3 @@ dist-ssr
 
 # Documenation
 docs/
-
-# Added by cargo
-/target
-/Cargo.lock

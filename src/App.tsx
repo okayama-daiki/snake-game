@@ -3,9 +3,11 @@ import Lobby from "./components/Lobby";
 import Game from "./components/Game";
 import ErrorModal from "./components/Modal/Error";
 import { ConnectionStatus, PlayerStatus } from "./types";
-import init from "render-engine";
+import init from "renderer";
 
-const socket = new WebSocket(import.meta.env.VITE_WSS_URI);
+const socket = new WebSocket(
+  import.meta.env.VITE_WSS_URI || "ws://localhost:5173"
+);
 
 init();
 
