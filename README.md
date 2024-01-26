@@ -49,6 +49,14 @@ You can have fun from [this link](https://okayama-daiki.github.io/snake-game/).
 ![Title](/screenshots/title.webp)
 ![Playing](/screenshots/playing.webp)
 
+## Prerequisite
+
+Install wasm-pack for Rust builds to webassebmly.
+
+```bash
+cargo install wasm-pack
+```
+
 ## Installation
 
 ```bash
@@ -57,17 +65,15 @@ git clone https://github.com/okayama-daiki/snake-game
 
 ## Setup
 
-If the backend server is not ready, you can get from [here](https://github.com/okayama-daiki/snake-game-backend/).
-
 ```bash
-echo VITE_WSS_URI="<URI of backend server>" > .env.local
+cd snake-game
+npm install && npm run build
 ```
 
-After setting up the server, install the necessary dependencies.
+## Run
 
 ```bash
-wasm-pack build --target web
-npm install
+npm run start
 ```
 
 ## Tech Stack
