@@ -14,6 +14,7 @@ use super::view::View;
 static FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
 
+#[derive(Default)]
 pub struct GameEngine<T> {
     frame_count: u32,
     snakes: HashMap<Uuid, Snake<T>>,

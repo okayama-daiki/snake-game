@@ -3,7 +3,7 @@ use serde::Serialize;
 
 static FIELD_SIZE: f32 = 10000.0;
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, Clone)]
 pub struct Coordinate<T> {
     pub x: T,
     pub y: T,
@@ -14,13 +14,6 @@ where
     T: Float,
     f32: Into<T>,
 {
-    pub fn clone(&self) -> Coordinate<T> {
-        Coordinate {
-            x: self.x,
-            y: self.y,
-        }
-    }
-
     pub fn distance2(&self, other: &Coordinate<T>) -> T {
         (self.x - other.x).powi(2) + (self.y - other.y).powi(2)
     }

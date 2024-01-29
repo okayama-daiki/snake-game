@@ -15,7 +15,7 @@ const COLORS: [&str; 7] = [
     "330", // pink
 ];
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Snake<T> {
     pub bodies: VecDeque<Coordinate<T>>, // head, ..., tail
     pub acceleration_time_left: u32,
@@ -49,23 +49,6 @@ where
             },
             frame_count_offset: 0,
             is_visible_head: true,
-        }
-    }
-
-    pub fn clone(&self) -> Snake<T> {
-        let mut bodies = VecDeque::new();
-        for body in self.bodies.iter() {
-            bodies.push_back(body.clone());
-        }
-        Snake {
-            bodies,
-            acceleration_time_left: self.acceleration_time_left,
-            speed: self.speed,
-            size: self.size,
-            color: self.color.clone(),
-            velocity: self.velocity.clone(),
-            frame_count_offset: self.frame_count_offset,
-            is_visible_head: self.is_visible_head,
         }
     }
 

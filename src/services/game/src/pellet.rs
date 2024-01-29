@@ -14,7 +14,7 @@ const COLORS: [&str; 7] = [
     "330", // pink
 ];
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Pellet<T> {
     pub center: Coordinate<T>,
     pub radius: T,
@@ -52,17 +52,6 @@ where
             size,
             color,
             frame_count_offset: 0,
-        }
-    }
-
-    pub fn clone(&self) -> Pellet<T> {
-        Pellet {
-            center: self.center.clone(),
-            radius: self.radius,
-            position: self.position.clone(),
-            size: self.size,
-            color: self.color.clone(),
-            frame_count_offset: self.frame_count_offset,
         }
     }
 
