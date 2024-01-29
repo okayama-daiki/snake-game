@@ -1,7 +1,7 @@
-use crate::game::coordinate::Coordinate;
-use crate::game::engine::GameEngine;
 use crate::messages::{ClientMessage, Connect, Disconnect, WebsocketMessage};
 use actix::{Actor, AsyncContext, Context, Handler, Recipient};
+use game::coordinate::Coordinate;
+use game::engine::GameEngine;
 use serde_json::to_string;
 use std::collections::HashMap;
 use std::time::Duration;

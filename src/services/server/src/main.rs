@@ -1,4 +1,3 @@
-mod game;
 mod messages;
 mod websocket_actor;
 mod websocket_session;

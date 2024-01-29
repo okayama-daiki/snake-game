@@ -1,7 +1,7 @@
 use num_traits::Float;
 use serde::Serialize;
 
-use super::FIELD_SIZE;
+static FIELD_SIZE: f32 = 10000.0;
 
 #[derive(Serialize, Default)]
 pub struct Coordinate<T> {

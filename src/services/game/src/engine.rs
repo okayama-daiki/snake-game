@@ -10,8 +10,8 @@ use super::map::Map;
 use super::pellet::Pellet;
 use super::snake::Snake;
 use super::view::View;
-use super::FIELD_SIZE;
 
+static FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
 
 pub struct GameEngine<T> {
