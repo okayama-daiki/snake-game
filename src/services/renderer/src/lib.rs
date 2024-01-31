@@ -12,7 +12,9 @@ use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
     JsCast,
 };
-use web_sys::{js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
+use web_sys::{
+    js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
+};
 
 static GLOBAL_MARGIN: f64 = 50.;
 
@@ -84,7 +86,7 @@ impl RenderEngine {
             let context = get_context(&self.canvas);
             let callback = self.callback.clone();
             let get_mouse_position = create_mouse_position_getter();
-            let on_message = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+            let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
                 // 3.1. Parse the message into a Message struct and render the Message.
                 let message: Message =
                     serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
@@ -111,7 +113,7 @@ impl RenderEngine {
                         .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
                         .ok();
                 }
-            }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+            }) as Box<dyn FnMut(MessageEvent)>);
             self.socket
                 .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
             on_message.forget();
