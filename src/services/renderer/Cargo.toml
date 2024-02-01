@@ -27,5 +27,8 @@ features = [ # Ref: https://rustwasm.github.io/wasm-bindgen/api/web_sys/
   "WebSocket",
   "MessageEvent",
   "MouseEvent",
-  "Performance"
+  "Performance",
+  "Blob",
+  "FileReader",
+  "BinaryType",
 ]

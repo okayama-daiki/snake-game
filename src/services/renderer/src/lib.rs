@@ -13,7 +13,8 @@ use wasm_bindgen::{
     JsCast,
 };
 use web_sys::{
-    js_sys::Function, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
+    js_sys::{ArrayBuffer, Function, Uint8Array},
+    CanvasRenderingContext2d, FileReader, HtmlCanvasElement, MessageEvent, WebSocket,
 };
 
 static GLOBAL_MARGIN: f64 = 50.;
@@ -50,6 +51,8 @@ impl RenderEngine {
 
     pub fn init(&mut self) {
         console_error_panic_hook::set_once();
+        self.socket
+            .set_binary_type(web_sys::BinaryType::Arraybuffer);
 
         // 1. Set the canvas size to the window size.
         self.canvas.set_height(get_height());
@@ -117,8 +120,9 @@ impl RenderEngine {
                 }
 
                 // 3.1. Parse the message into a Message struct and render the Message.
-                let message: Message =
-                    serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
+                let array_buffer = e.data().dyn_into::<ArrayBuffer>().unwrap();
+                let array = Uint8Array::new(&array_buffer);
+                let message: Message = Message::from_bytes(&array.to_vec());
 
                 // 3.2. if the snake is dead, gradually darken the screen and call the callback function when the screen is completely dark.
                 if !message.is_alive && is_alive.get() {

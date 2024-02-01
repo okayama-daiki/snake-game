@@ -2,7 +2,6 @@ use crate::messages::{ClientMessage, Connect, Disconnect, WebsocketMessage};
 use actix::{Actor, AsyncContext, Context, Handler, Recipient};
 use game::coordinate::Coordinate;
 use game::engine::GameEngine;
-use serde_json::to_string;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
@@ -56,14 +55,15 @@ impl Actor for WebsocketActor {
                 if session.additional_send_frame_count > 0 {
                     session.additional_send_frame_count -= 1;
                     session.addr.do_send(WebsocketMessage(
-                        to_string(&act.engine.view(
-                            id,
-                            session.center_coordinate.x,
-                            session.center_coordinate.y,
-                            (session.window_size.width + 100).into(),
-                            (session.window_size.height + 100).into(),
-                        ))
-                        .unwrap(),
+                        act.engine
+                            .view(
+                                id,
+                                session.center_coordinate.x,
+                                session.center_coordinate.y,
+                                (session.window_size.width + 100).into(),
+                                (session.window_size.height + 100).into(),
+                            )
+                            .to_bytes(),
                     ));
                 }
             }
