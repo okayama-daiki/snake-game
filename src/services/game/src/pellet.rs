@@ -1,5 +1,5 @@
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::coordinate::Coordinate;
 
@@ -13,7 +13,7 @@ const COLORS: [&str; 7] = [
     "330", // pink
 ];
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Pellet {
     pub center: Coordinate,
     pub radius: f32,
@@ -27,10 +27,10 @@ impl Pellet {
     pub fn new(initial_position: Coordinate) -> Pellet {
         Pellet {
             center: initial_position.clone(),
-            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0),
+            radius: rand::thread_rng().gen_range(0.5, 5.),
             position: initial_position,
-            size: rand::thread_rng().gen_range(1..=3),
-            color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
+            size: rand::thread_rng().gen_range(1, 4),
+            color: COLORS[rand::thread_rng().gen_range(0, COLORS.len())].to_string(),
             frame_count_offset: 0,
         }
     }
@@ -42,7 +42,7 @@ impl Pellet {
     ) -> Pellet {
         Pellet {
             center: initial_position.clone(),
-            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0),
+            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5, 5.0),
             position: initial_position,
             size,
             color,

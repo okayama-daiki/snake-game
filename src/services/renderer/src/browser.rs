@@ -1,7 +1,7 @@
 // Browser related functions
 
-use crate::types::Coordinate;
 use anyhow::{anyhow, Result};
+use game::coordinate::Coordinate;
 use std::cell::Cell;
 use std::rc::Rc;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -31,8 +31,8 @@ pub fn canvas() -> Result<HtmlCanvasElement> {
 
 pub fn get_center_coordinate() -> Coordinate {
     Coordinate {
-        x: get_width() as f64 / 2.,
-        y: get_height() as f64 / 2.,
+        x: get_width() as f32 / 2.,
+        y: get_height() as f32 / 2.,
     }
 }
 
@@ -59,8 +59,8 @@ pub fn create_mouse_position_getter() -> Box<dyn Fn() -> Coordinate> {
         let mouse_position_clone = mouse_position.clone();
         let closure = Closure::wrap(Box::new(move |e: MouseEvent| {
             mouse_position_clone.set(Coordinate {
-                x: e.client_x() as f64,
-                y: e.client_y() as f64,
+                x: e.client_x() as f32,
+                y: e.client_y() as f32,
             });
         }) as Box<dyn FnMut(MouseEvent)>);
         window.set_onmousemove(Some(closure.as_ref().unchecked_ref()));

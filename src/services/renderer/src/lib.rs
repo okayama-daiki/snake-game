@@ -1,5 +1,5 @@
-mod types;
-use types::{Coordinate, Map, Message, Pellet, Snake};
+use game::{coordinate::Coordinate, map::Map, pellet::Pellet, snake::Snake, view::View as Message};
+
 #[macro_use]
 mod browser;
 use browser::{
@@ -209,15 +209,16 @@ fn render(context: &CanvasRenderingContext2d, message: &Message) {
 
 fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
     for pellet in pellets {
-        context.set_fill_style(&JsValue::from_str(&pellet.hsl()));
-        context.set_shadow_color(pellet.hsl().as_str());
-        context.set_shadow_blur(pellet.size * 10.);
+        let hsl = pellet_rendering_helper::to_hsl(pellet);
+        context.set_fill_style(&JsValue::from_str(&hsl));
+        context.set_shadow_color(hsl.as_str());
+        context.set_shadow_blur((pellet.size as f64) * 10.);
         context.begin_path();
         context
             .arc(
-                pellet.position.x,
-                pellet.position.y,
-                pellet.radius(),
+                pellet.position.x as f64,
+                pellet.position.y as f64,
+                pellet_rendering_helper::to_radius(pellet),
                 0.0,
                 std::f64::consts::PI * 2.0,
             )
@@ -230,7 +231,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     for snake in snakes {
         // Draw the body
 
-        let hsl = snake.hsl();
+        let hsl = snake_rendering_helper::to_hsl(snake);
 
         for body in snake.bodies.iter().rev() {
             context.set_fill_style(&JsValue::from_str("rgba(0, 0, 0, 0.3)"));
@@ -239,8 +240,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             context.begin_path();
             context
                 .arc(
-                    body.x,
-                    body.y,
+                    body.x as f64,
+                    body.y as f64,
                     snake.size as f64,
                     0.0,
                     std::f64::consts::PI * 2.0,
@@ -257,8 +258,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             context.begin_path();
             context
                 .arc(
-                    body.x,
-                    body.y,
+                    body.x as f64,
+                    body.y as f64,
                     snake.size as f64,
                     0.0,
                     std::f64::consts::PI * 2.0,
@@ -269,15 +270,15 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
 
         // Draw the face
         if snake.is_visible_head {
-            let head = snake.bodies.first().unwrap();
-            let theta = snake.velocity.y.atan2(snake.velocity.x);
+            let head = snake.bodies.front().unwrap();
+            let theta = snake.velocity.y.atan2(snake.velocity.x) as f64;
             context.restore();
             context.set_fill_style(&JsValue::from_str("#fff"));
             context.begin_path();
             context
                 .arc(
-                    head.x + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
-                    head.y + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
+                    head.x as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
+                    head.y as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
                     snake.size as f64 * 0.3,
                     0.,
                     std::f64::consts::PI * 2.,
@@ -287,8 +288,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             context.begin_path();
             context
                 .arc(
-                    head.x + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
-                    head.y + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
+                    head.x as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
+                    head.y as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
                     snake.size as f64 * 0.3,
                     0.,
                     std::f64::consts::PI * 2.,
@@ -299,8 +300,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             context.begin_path();
             context
                 .arc(
-                    head.x + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
-                    head.y + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
+                    head.x as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
+                    head.y as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
                     snake.size as f64 * 0.15,
                     0.,
                     std::f64::consts::PI * 2.,
@@ -310,8 +311,8 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             context.begin_path();
             context
                 .arc(
-                    head.x + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
-                    head.y + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
+                    head.x as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
+                    head.y as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
                     snake.size as f64 * 0.15,
                     0.,
                     std::f64::consts::PI * 2.,
@@ -357,8 +358,8 @@ fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
     sub_context.begin_path();
     sub_context
         .arc(
-            map.self_coordinate[0] as f64,
-            map.self_coordinate[1] as f64,
+            map.self_coordinate.0 as f64,
+            map.self_coordinate.1 as f64,
             3.,
             0.,
             std::f64::consts::PI * 2.,
@@ -387,7 +388,13 @@ fn render_background(context: &CanvasRenderingContext2d, background_dots: &Vec<C
     for dot in background_dots {
         context.begin_path();
         context
-            .arc(dot.x, dot.y, 30., 0.0, std::f64::consts::PI * 2.0)
+            .arc(
+                dot.x as f64,
+                dot.y as f64,
+                30.,
+                0.0,
+                std::f64::consts::PI * 2.0,
+            )
             .unwrap();
         context.fill();
     }
@@ -401,5 +408,29 @@ fn vector(a: &Coordinate, b: &Coordinate) -> Coordinate {
     Coordinate {
         x: x / length,
         y: y / length,
+    }
+}
+
+mod pellet_rendering_helper {
+    use super::Pellet;
+
+    pub fn to_hsl(pellet: &Pellet) -> String {
+        format!(
+            "hsl({}, 100%, {}%)",
+            pellet.color,
+            (30. * (pellet.frame_count_offset as f64 / 7.).sin()).abs() + 50.
+        )
+    }
+
+    pub fn to_radius(pellet: &Pellet) -> f64 {
+        (pellet.size as f64 * 2.).min(pellet.frame_count_offset as f64)
+    }
+}
+
+mod snake_rendering_helper {
+    use super::Snake;
+
+    pub fn to_hsl(snake: &Snake) -> String {
+        format!("hsl({}, 100%, 40%)", snake.color)
     }
 }

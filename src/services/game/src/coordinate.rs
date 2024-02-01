@@ -1,8 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 static FIELD_SIZE: f32 = 10000.0;
 
-#[derive(Serialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone, Copy)]
 pub struct Coordinate {
     pub x: f32,
     pub y: f32,

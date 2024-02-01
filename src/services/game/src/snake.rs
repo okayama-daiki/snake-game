@@ -1,5 +1,5 @@
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 use super::coordinate::Coordinate;
@@ -14,7 +14,7 @@ const COLORS: [&str; 7] = [
     "330", // pink
 ];
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Snake {
     pub bodies: VecDeque<Coordinate>, // head, ..., tail
     pub acceleration_time_left: u32,
@@ -37,7 +37,7 @@ impl Snake {
             acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
-            color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
+            color: COLORS[rand::thread_rng().gen_range(0, COLORS.len())].to_string(),
             velocity: Coordinate { x: 0., y: 0. },
             frame_count_offset: 0,
             is_visible_head: true,
