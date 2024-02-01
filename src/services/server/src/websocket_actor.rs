@@ -10,8 +10,6 @@ use uuid::Uuid;
 const FPS: u64 = 30;
 const FRAME_INTERVAL: Duration = Duration::from_millis(1000 / FPS);
 
-type Precision = f32;
-
 #[derive(Default)]
 struct WindowSize {
     pub width: u16,
@@ -23,12 +21,12 @@ struct Session {
     pub is_playing: bool,
     pub additional_send_frame_count: u32, // after died, send additional frames
     pub window_size: WindowSize,
-    pub center_coordinate: Coordinate<Precision>,
+    pub center_coordinate: Coordinate,
 }
 
 pub struct WebsocketActor {
     sessions: HashMap<Uuid, Session>,
-    engine: GameEngine<Precision>,
+    engine: GameEngine,
 }
 
 impl Default for WebsocketActor {
@@ -124,8 +122,8 @@ impl Handler<ClientMessage> for WebsocketActor {
                 }
             }
             "v" => {
-                let x = iter.next().unwrap().parse::<Precision>().unwrap();
-                let y = iter.next().unwrap().parse::<Precision>().unwrap();
+                let x = iter.next().unwrap().parse::<f32>().unwrap();
+                let y = iter.next().unwrap().parse::<f32>().unwrap();
                 self.engine.change_velocity(id, Coordinate { x, y });
             }
             "w" => {

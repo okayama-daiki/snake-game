@@ -1,4 +1,3 @@
-use num_traits::Float;
 use rand::Rng;
 use serde::Serialize;
 
@@ -15,24 +14,20 @@ const COLORS: [&str; 7] = [
 ];
 
 #[derive(Serialize, Clone)]
-pub struct Pellet<T> {
-    pub center: Coordinate<T>,
-    pub radius: T,
-    pub position: Coordinate<T>,
+pub struct Pellet {
+    pub center: Coordinate,
+    pub radius: f32,
+    pub position: Coordinate,
     pub size: u8,
     pub color: String,
     pub frame_count_offset: u32,
 }
 
-impl<T> Pellet<T>
-where
-    T: Float,
-    f32: Into<T>,
-{
-    pub fn new(initial_position: Coordinate<T>) -> Pellet<T> {
+impl Pellet {
+    pub fn new(initial_position: Coordinate) -> Pellet {
         Pellet {
             center: initial_position.clone(),
-            radius: T::from(Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0)).unwrap(),
+            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0),
             position: initial_position,
             size: rand::thread_rng().gen_range(1..=3),
             color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
@@ -41,13 +36,13 @@ where
     }
 
     pub fn new_with_color_and_size(
-        initial_position: Coordinate<T>,
+        initial_position: Coordinate,
         color: String,
         size: u8,
-    ) -> Pellet<T> {
+    ) -> Pellet {
         Pellet {
             center: initial_position.clone(),
-            radius: T::from(Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0)).unwrap(),
+            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5..5.0),
             position: initial_position,
             size,
             color,
@@ -58,7 +53,7 @@ where
     pub fn update(&mut self) {
         let theta = self.frame_count_offset % 72 * 5;
         let rad = theta as f32 * std::f32::consts::PI / 180.0;
-        self.position.x = self.center.x + self.radius * T::from(rad.cos()).unwrap();
-        self.position.y = self.center.y + self.radius * T::from(rad.sin()).unwrap();
+        self.position.x = self.center.x + self.radius * rad.cos();
+        self.position.y = self.center.y + self.radius * rad.sin();
     }
 }

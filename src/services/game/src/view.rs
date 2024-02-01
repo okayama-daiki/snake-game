@@ -6,10 +6,10 @@ use super::pellet::Pellet;
 use super::snake::Snake;
 
 #[derive(Serialize)]
-pub struct View<T> {
+pub struct View {
     pub is_alive: bool,
-    pub snakes: Vec<Snake<T>>,
-    pub pellets: Vec<Pellet<T>>,
-    pub background_dots: Vec<Coordinate<T>>,
+    pub snakes: Vec<Snake>,
+    pub pellets: Vec<Pellet>,
+    pub background_dots: Vec<Coordinate>,
     pub map: Map,
 }

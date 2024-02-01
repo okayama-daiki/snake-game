@@ -1,7 +1,6 @@
 use rand::Rng;
 use std::collections::{HashMap, HashSet, VecDeque};
 // TODO: Consider using BuildHasher trait
-use num_traits::Float;
 use std::cmp::Ordering;
 use uuid::Uuid;
 
@@ -15,18 +14,14 @@ static FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
 
 #[derive(Default)]
-pub struct GameEngine<T> {
+pub struct GameEngine {
     frame_count: u32,
-    snakes: HashMap<Uuid, Snake<T>>,
-    pellets: HashMap<Uuid, Pellet<T>>,
+    snakes: HashMap<Uuid, Snake>,
+    pellets: HashMap<Uuid, Pellet>,
 }
 
-impl<T> GameEngine<T>
-where
-    T: Float,
-    f32: Into<T>,
-{
-    pub fn new() -> GameEngine<T> {
+impl GameEngine {
+    pub fn new() -> GameEngine {
         GameEngine {
             frame_count: 0,
             snakes: HashMap::new(),
@@ -34,24 +29,24 @@ where
         }
     }
 
-    pub fn get_random_coordinate(&self) -> Coordinate<T> {
+    pub fn get_random_coordinate(&self) -> Coordinate {
         let rx = rand::thread_rng().gen_range((0.0)..=1.0);
         let ry = rand::thread_rng().gen_range((0.0)..=1.0);
-        let x = FIELD_SIZE.into() * rx.into();
-        let y = FIELD_SIZE.into() * ry.into();
+        let x = FIELD_SIZE * rx;
+        let y = FIELD_SIZE * ry;
         Coordinate { x, y }
     }
 
-    pub fn get_snake(&self, id: &Uuid) -> Option<&Snake<T>> {
+    pub fn get_snake(&self, id: &Uuid) -> Option<&Snake> {
         self.snakes.get(id)
     }
 
-    pub fn get_snake_mut(&mut self, id: &Uuid) -> Option<&mut Snake<T>> {
+    pub fn get_snake_mut(&mut self, id: &Uuid) -> Option<&mut Snake> {
         self.snakes.get_mut(id)
     }
 
     pub fn add_snake(&mut self, id: Uuid) {
-        let snake: Snake<T> = Snake::new(self.get_random_coordinate(), 5.0.into());
+        let snake: Snake = Snake::new(self.get_random_coordinate(), 5.0);
         self.snakes.insert(id, snake);
     }
 
@@ -60,8 +55,8 @@ where
             for body in snake.bodies.iter() {
                 if rand::thread_rng().gen_range(0..=10) < 5 {
                     let body = body.clone();
-                    let dx = rand::thread_rng().gen_range((-10.)..=10.).into();
-                    let dy = rand::thread_rng().gen_range((-10.)..=10.).into();
+                    let dx = rand::thread_rng().gen_range((-10.)..=10.);
+                    let dy = rand::thread_rng().gen_range((-10.)..=10.);
                     let pellet = Pellet::new_with_color_and_size(
                         Coordinate {
                             x: body.x + dx,
@@ -94,11 +89,11 @@ where
 
         // Update snakes
         for (_, snake) in self.snakes.iter_mut() {
-            let mut accelerate_factor = T::one();
+            let mut accelerate_factor = 1.;
 
             if snake.acceleration_time_left > 0 {
                 snake.acceleration_time_left -= 1;
-                accelerate_factor = T::from(2).unwrap();
+                accelerate_factor = 2.;
             }
 
             let head = snake.get_head();
@@ -107,8 +102,8 @@ where
                 y: head.y + snake.velocity.y * snake.speed * accelerate_factor,
             };
             let new_head = Coordinate {
-                x: (new_head.x + FIELD_SIZE.into()) % FIELD_SIZE.into(),
-                y: (new_head.y + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                x: (new_head.x + FIELD_SIZE) % FIELD_SIZE,
+                y: (new_head.y + FIELD_SIZE) % FIELD_SIZE,
             };
 
             if snake.acceleration_time_left > 0 && snake.frame_count_offset % 6 == 0 {
@@ -128,16 +123,15 @@ where
 
             for (id, pellet) in self.pellets.iter_mut() {
                 // Draw pellets towards the snake
-                if pellet.position.distance2(&new_head) < T::from((snake.size * 2).pow(2)).unwrap()
-                {
-                    let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5f32.into();
-                    let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5f32.into();
+                if pellet.position.distance2(&new_head) < ((snake.size * 2).pow(2) as f32) {
+                    let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5.;
+                    let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5.;
                     pellet.position = Coordinate { x: nx, y: ny };
                     touched_pellets.insert(*id);
                 }
 
                 // Eat pellets
-                if pellet.position.distance2(&new_head) < T::from(snake.size.pow(2)).unwrap() {
+                if pellet.position.distance2(&new_head) < (snake.size.pow(2) as f32) {
                     snake.bodies.push_back(snake.get_tail().clone());
                     eaten_pellets.push(*id);
                 }
@@ -165,7 +159,7 @@ where
                 // 1. the acceleration snake wins
                 // 2. the bigger snake wins
                 // 3. random
-                if head1.distance2(head2) <= T::from((snake1.size + snake2.size).pow(2)).unwrap() {
+                if head1.distance2(head2) <= ((snake1.size + snake2.size).pow(2) as f32) {
                     if snake1.acceleration_time_left > 0 && snake2.acceleration_time_left > 0
                         || snake1.acceleration_time_left == 0 && snake2.acceleration_time_left == 0
                     {
@@ -193,9 +187,7 @@ where
                 }
 
                 for body2 in snake2.bodies.iter() {
-                    if head1.distance2(body2)
-                        <= T::from((snake1.size + snake2.size).pow(2)).unwrap()
-                    {
+                    if head1.distance2(body2) <= ((snake1.size + snake2.size).pow(2) as f32) {
                         dead_snakes.insert(*id1);
                     }
                 }
@@ -222,12 +214,12 @@ where
         self.frame_count += 1;
     }
 
-    pub fn change_velocity(&mut self, id: &Uuid, velocity: Coordinate<T>) {
+    pub fn change_velocity(&mut self, id: &Uuid, velocity: Coordinate) {
         if let Some(snake) = self.snakes.get_mut(id) {
-            let weight = 0.2.into();
+            let weight = 0.2;
             let new_velocity = Coordinate {
-                x: (T::one() - weight) * snake.velocity.x + weight * velocity.x,
-                y: (T::one() - weight) * snake.velocity.y + weight * velocity.y,
+                x: (1. - weight) * snake.velocity.x + weight * velocity.x,
+                y: (1. - weight) * snake.velocity.y + weight * velocity.y,
             };
             let norm = (new_velocity.x.powi(2) + new_velocity.y.powi(2)).sqrt();
             let new_velocity = Coordinate {
@@ -238,26 +230,26 @@ where
         }
     }
 
-    pub fn view(&self, id: &Uuid, cx: T, cy: T, width: T, height: T) -> View<T> {
+    pub fn view(&self, id: &Uuid, cx: f32, cy: f32, width: f32, height: f32) -> View {
         //! Get the view of the game.
         //! The view is centered at (cx, cy) with width and height.
 
-        let mut snakes: Vec<Snake<T>> = Vec::new();
-        let mut pellets: Vec<Pellet<T>> = Vec::new();
+        let mut snakes: Vec<Snake> = Vec::new();
+        let mut pellets: Vec<Pellet> = Vec::new();
 
-        let x0 = cx - width / 2.0.into();
-        let y0 = cy - height / 2.0.into();
+        let x0 = cx - width / 2.0;
+        let y0 = cy - height / 2.0;
 
         // 1. Get snakes in the rectangle
         for (_, snake) in self.snakes.iter() {
             let snake = snake.clone();
-            let mut bodies: VecDeque<Coordinate<T>> = VecDeque::new();
+            let mut bodies: VecDeque<Coordinate> = VecDeque::new();
             for body in snake.bodies.iter() {
                 if body.is_in_rectangle(x0, y0, width, height) {
                     let body = body.clone();
                     bodies.push_back(Coordinate {
-                        x: (body.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
-                        y: (body.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        x: (body.x - x0 + FIELD_SIZE) % FIELD_SIZE,
+                        y: (body.y - y0 + FIELD_SIZE) % FIELD_SIZE,
                     });
                 }
             }
@@ -275,8 +267,8 @@ where
                 let pellet = pellet.clone();
                 pellets.push(Pellet {
                     position: Coordinate {
-                        x: (pellet.position.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
-                        y: (pellet.position.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        x: (pellet.position.x - x0 + FIELD_SIZE) % FIELD_SIZE,
+                        y: (pellet.position.y - y0 + FIELD_SIZE) % FIELD_SIZE,
                     },
                     ..pellet
                 });
@@ -291,20 +283,20 @@ where
         let mut arr = vec![vec![0; SIZE]; SIZE];
         for (_, snake) in self.snakes.iter() {
             for body in snake.bodies.iter() {
-                let x = (body.x.to_f32().unwrap() / cell_size).floor() as usize;
-                let y = (body.y.to_f32().unwrap() / cell_size).floor() as usize;
+                let x = (body.x / cell_size).floor() as usize;
+                let y = (body.y / cell_size).floor() as usize;
                 arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
             }
         }
         for (_, pellet) in self.pellets.iter() {
-            let x = (pellet.position.x.to_f32().unwrap() / cell_size).floor() as usize;
-            let y = (pellet.position.y.to_f32().unwrap() / cell_size).floor() as usize;
+            let x = (pellet.position.x / cell_size).floor() as usize;
+            let y = (pellet.position.y / cell_size).floor() as usize;
             arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
         }
 
         let self_coordinate = (
-            (cx.to_f32().unwrap() / cell_size).floor() as usize,
-            (cy.to_f32().unwrap() / cell_size).floor() as usize,
+            (cx / cell_size).floor() as usize,
+            (cy / cell_size).floor() as usize,
         );
 
         let map = Map {
@@ -313,18 +305,18 @@ where
         };
 
         // 4. Get background_dots in the rectangle
-        let mut background_dots: Vec<Coordinate<T>> = Vec::new();
+        let mut background_dots: Vec<Coordinate> = Vec::new();
 
         for x in 0..100 {
             for y in 0..100 {
                 let hex = Coordinate {
-                    x: ((x * 100) as f32).into(),
-                    y: ((y * 100) as f32).into(),
+                    x: (x * 100) as f32,
+                    y: (y * 100) as f32,
                 };
                 if hex.is_in_rectangle(x0, y0, width, height) {
                     background_dots.push(Coordinate {
-                        x: (hex.x - x0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
-                        y: (hex.y - y0 + FIELD_SIZE.into()) % FIELD_SIZE.into(),
+                        x: (hex.x - x0 + FIELD_SIZE) % FIELD_SIZE,
+                        y: (hex.y - y0 + FIELD_SIZE) % FIELD_SIZE,
                     });
                 }
             }
