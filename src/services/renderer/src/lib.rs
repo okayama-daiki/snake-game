@@ -4,10 +4,10 @@ use types::{Coordinate, Map, Message, Pellet, Snake};
 mod browser;
 use browser::{
     canvas, create_mouse_position_getter, get_center_coordinate, get_context, get_height,
-    get_width, window,
+    get_width, now, window,
 };
-use std::cell::Cell;
 use std::rc::Rc;
+use std::{cell::Cell, collections::VecDeque};
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
     JsCast,
@@ -80,6 +80,11 @@ impl RenderEngine {
 
         // 3. Add a message handler to the websocket so that render is called when a message is received.
         {
+            let mut frame_count = 0;
+            let mut process_time: VecDeque<f64> = VecDeque::with_capacity(30);
+            let mut fps_log: VecDeque<f64> = VecDeque::with_capacity(30);
+            let mut last_frame_time = now().unwrap();
+
             let is_alive = Cell::new(true);
             let frame_after_death = Cell::new(0);
             let socket = self.socket.clone();
@@ -87,6 +92,30 @@ impl RenderEngine {
             let callback = self.callback.clone();
             let get_mouse_position = create_mouse_position_getter();
             let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
+                // 3.0. Calculate the FPS
+                let start = now().unwrap();
+                let frame_duration = now().unwrap() - last_frame_time;
+                last_frame_time = now().unwrap();
+                fps_log.push_back(frame_duration);
+                if frame_count % 30 == 0 {
+                    log!(
+                        "FPS: {}",
+                        1000. / (fps_log.iter().sum::<f64>() / fps_log.len() as f64)
+                    );
+                    log!(
+                        "FPS variance: {}",
+                        fps_log
+                            .iter()
+                            .map(|x| (1000. / x - 60.).powi(2))
+                            .sum::<f64>()
+                            / fps_log.len() as f64
+                    );
+                    log!(
+                        "Process time: {}",
+                        process_time.iter().sum::<f64>() / process_time.len() as f64
+                    );
+                }
+
                 // 3.1. Parse the message into a Message struct and render the Message.
                 let message: Message =
                     serde_json::from_str(&e.data().as_string().unwrap()).unwrap();
@@ -113,6 +142,8 @@ impl RenderEngine {
                         .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
                         .ok();
                 }
+                frame_count += 1;
+                process_time.push_back(now().unwrap() - start);
             }) as Box<dyn FnMut(MessageEvent)>);
             self.socket
                 .set_onmessage(Some(on_message.as_ref().unchecked_ref()));

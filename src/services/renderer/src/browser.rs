@@ -70,3 +70,10 @@ pub fn create_mouse_position_getter() -> Box<dyn Fn() -> Coordinate> {
     let getter = move || mouse_position.get();
     Box::new(getter)
 }
+
+pub fn now() -> Result<f64> {
+    Ok(window()?
+        .performance()
+        .ok_or_else(|| anyhow!("No Performance Found"))?
+        .now())
+}
