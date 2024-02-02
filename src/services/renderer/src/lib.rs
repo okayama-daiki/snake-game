@@ -14,7 +14,7 @@ use wasm_bindgen::{
 };
 use web_sys::{
     js_sys::{ArrayBuffer, Function, Uint8Array},
-    CanvasRenderingContext2d, FileReader, HtmlCanvasElement, MessageEvent, WebSocket,
+    BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
 };
 
 static GLOBAL_MARGIN: f64 = 50.;
@@ -51,8 +51,7 @@ impl RenderEngine {
 
     pub fn init(&mut self) {
         console_error_panic_hook::set_once();
-        self.socket
-            .set_binary_type(web_sys::BinaryType::Arraybuffer);
+        self.socket.set_binary_type(BinaryType::Arraybuffer);
 
         // 1. Set the canvas size to the window size.
         self.canvas.set_height(get_height());

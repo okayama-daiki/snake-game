@@ -18,17 +18,17 @@ game = { path = "../game" }
 
 [dependencies.web-sys]
 version = "0.3"
-features = [ # Ref: https://rustwasm.github.io/wasm-bindgen/api/web_sys/
-  "console",
-  "Document",
-  "Window",
-  "HtmlCanvasElement",
-  "CanvasRenderingContext2d",
-  "WebSocket",
-  "MessageEvent",
-  "MouseEvent",
-  "Performance",
-  "Blob",
-  "FileReader",
-  "BinaryType",
-]
+features = [
+  'BinaryType',
+  'Blob',
+  'CanvasRenderingContext2d',
+  'Document',
+  'FileReader',
+  'HtmlCanvasElement',
+  'MessageEvent',
+  'MouseEvent',
+  'Performance',
+  'WebSocket',
+  'Window',
+  'console'
+] # Ref: https://rustwasm.github.io/wasm-bindgen/api/web_sys/
