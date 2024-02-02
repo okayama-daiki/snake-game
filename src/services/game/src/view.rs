@@ -12,7 +12,7 @@ pub struct View {
     pub snakes: Vec<Snake>,
     pub pellets: Vec<Pellet>,
     pub background_dots: Vec<Coordinate>,
-    pub map: Map,
+    pub map: Option<Map>,
 }
 
 impl View {

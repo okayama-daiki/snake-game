@@ -17,6 +17,7 @@ use web_sys::{
     BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
 };
 
+static MINIMAP_SIZE: f64 = 100.;
 static GLOBAL_MARGIN: f64 = 50.;
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
@@ -91,6 +92,12 @@ impl RenderEngine {
             let frame_after_death = Cell::new(0);
             let socket = self.socket.clone();
             let context = get_context(&self.canvas);
+
+            let minimap_canvas = canvas().unwrap();
+            minimap_canvas.set_height(MINIMAP_SIZE as u32);
+            minimap_canvas.set_width(MINIMAP_SIZE as u32);
+            let minimap_context = get_context(&minimap_canvas);
+
             let callback = self.callback.clone();
             let get_mouse_position = create_mouse_position_getter();
             let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
@@ -136,7 +143,7 @@ impl RenderEngine {
                 }
                 context
                     .set_global_alpha(1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.);
-                render(&context, &message);
+                render(&context, &minimap_context, &message);
 
                 // 3.3. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
                 if is_alive.get() {
@@ -197,7 +204,11 @@ impl RenderEngine {
     }
 }
 
-fn render(context: &CanvasRenderingContext2d, message: &Message) {
+fn render(
+    context: &CanvasRenderingContext2d,
+    minimap_context: &CanvasRenderingContext2d,
+    message: &Message,
+) {
     context.clear_rect(
         0.0,
         0.0,
@@ -207,7 +218,10 @@ fn render(context: &CanvasRenderingContext2d, message: &Message) {
     render_background(context, &message.background_dots);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
-    render_map(context, &message.map);
+    if let Some(map) = &message.map {
+        update_minimap(minimap_context, map);
+    }
+    render_minimap(context, minimap_context);
 }
 
 fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
@@ -326,40 +340,36 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
     }
 }
 
-fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
+fn update_minimap(minimap_context: &CanvasRenderingContext2d, map: &Map) {
     // NOTE: Based on the assumption that map is a 100*100 two-dimensional array
-    const MAP_SIZE: u32 = 100;
 
-    let sub_canvas = canvas().unwrap();
-    sub_canvas.set_height(MAP_SIZE);
-    sub_canvas.set_width(MAP_SIZE);
-    let sub_context = get_context(&sub_canvas);
+    minimap_context.clear_rect(0.0, 0.0, MINIMAP_SIZE, MINIMAP_SIZE);
 
     // Draw the map
-    for x in 0..MAP_SIZE as usize {
-        for y in 0..MAP_SIZE as usize {
-            sub_context.begin_path();
-            sub_context.set_fill_style(&JsValue::from_str(
+    for x in 0..MINIMAP_SIZE as usize {
+        for y in 0..MINIMAP_SIZE as usize {
+            minimap_context.begin_path();
+            minimap_context.set_fill_style(&JsValue::from_str(
                 format!("rgba(255, 255, 255, {})", map.map[x][y] as f32 / 10.).as_str(),
             ));
-            sub_context.fill_rect(x as f64, y as f64, 1., 1.);
+            minimap_context.fill_rect(x as f64, y as f64, 1., 1.);
         }
     }
 
     // Draw the coordinate axis
-    sub_context.set_stroke_style(&JsValue::from_str("#fff"));
-    sub_context.set_line_width(0.5);
-    sub_context.begin_path();
-    sub_context.move_to(MAP_SIZE as f64 / 2., 0.);
-    sub_context.line_to(MAP_SIZE as f64 / 2., MAP_SIZE as f64);
-    sub_context.move_to(0., MAP_SIZE as f64 / 2.);
-    sub_context.line_to(MAP_SIZE as f64, MAP_SIZE as f64 / 2.);
-    sub_context.stroke();
+    minimap_context.set_stroke_style(&JsValue::from_str("#fff"));
+    minimap_context.set_line_width(0.5);
+    minimap_context.begin_path();
+    minimap_context.move_to(MINIMAP_SIZE / 2., 0.);
+    minimap_context.line_to(MINIMAP_SIZE / 2., MINIMAP_SIZE);
+    minimap_context.move_to(0., MINIMAP_SIZE / 2.);
+    minimap_context.line_to(MINIMAP_SIZE, MINIMAP_SIZE / 2.);
+    minimap_context.stroke();
 
     // Draw the self coordinate
-    sub_context.set_fill_style(&JsValue::from_str("green"));
-    sub_context.begin_path();
-    sub_context
+    minimap_context.set_fill_style(&JsValue::from_str("green"));
+    minimap_context.begin_path();
+    minimap_context
         .arc(
             map.self_coordinate.0 as f64,
             map.self_coordinate.1 as f64,
@@ -368,16 +378,19 @@ fn render_map(context: &CanvasRenderingContext2d, map: &Map) {
             std::f64::consts::PI * 2.,
         )
         .unwrap();
-    sub_context.fill();
+    minimap_context.fill();
+}
 
+fn render_minimap(context: &CanvasRenderingContext2d, minimap_context: &CanvasRenderingContext2d) {
     // Paste the sub canvas to the main canvas
     let responsive_size = (get_width() as f64 / 20.).clamp(70., 100.);
     let margin = (get_width() as f64 / 10.).clamp(20., 50.);
+    let minimap_canvas = minimap_context.canvas().unwrap();
 
     context.set_shadow_blur(0.);
     context
         .draw_image_with_html_canvas_element_and_dw_and_dh(
-            &sub_canvas,
+            &minimap_canvas,
             get_width() as f64 - responsive_size - margin + GLOBAL_MARGIN,
             get_height() as f64 - responsive_size - margin + GLOBAL_MARGIN,
             responsive_size,

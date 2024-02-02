@@ -296,9 +296,13 @@ impl GameEngine {
             (cy / cell_size).floor() as usize,
         );
 
-        let map = Map {
-            map: arr,
-            self_coordinate,
+        let map = if self.frame_count % 30 == 0 {
+            Some(Map {
+                map: arr,
+                self_coordinate,
+            })
+        } else {
+            None
         };
 
         // 4. Get background_dots in the rectangle
