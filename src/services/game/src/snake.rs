@@ -30,7 +30,7 @@ impl Snake {
     pub fn new(initial_position: Coordinate, initial_speed: f32) -> Snake {
         let mut bodies = VecDeque::new();
         for _ in 0..10 {
-            bodies.push_back(initial_position.clone());
+            bodies.push_back(initial_position);
         }
         Snake {
             bodies,

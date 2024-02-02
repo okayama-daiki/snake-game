@@ -45,7 +45,7 @@ impl Actor for WebsocketActor {
             act.engine.forward();
             for (id, session) in act.sessions.iter_mut() {
                 if let Some(snake) = act.engine.get_snake(id) {
-                    session.center_coordinate = snake.get_head().clone();
+                    session.center_coordinate = snake.get_head().to_owned();
                     session.additional_send_frame_count = 150;
                 }
                 if act.engine.get_snake(id).is_none() && session.is_playing {

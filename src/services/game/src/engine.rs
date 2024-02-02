@@ -54,7 +54,6 @@ impl GameEngine {
         if let Some(snake) = self.snakes.get(id) {
             for body in snake.bodies.iter() {
                 if rand::thread_rng().gen_range(0, 10) < 5 {
-                    let body = body.clone();
                     let dx = rand::thread_rng().gen_range(-10., 10.);
                     let dy = rand::thread_rng().gen_range(-10., 10.);
                     let pellet = Pellet::new_with_color_and_size(
@@ -75,10 +74,9 @@ impl GameEngine {
 
     fn fill_pellet(&mut self) {
         while self.pellets.len() < MAX_PELLET_COUNT {
-            let position = self.get_random_coordinate();
-            let pellet = Pellet::new(position.clone());
+            let new_pellet = Pellet::new(self.get_random_coordinate());
             let id = Uuid::new_v4();
-            self.pellets.insert(id, pellet);
+            self.pellets.insert(id, new_pellet);
         }
     }
 
@@ -117,7 +115,7 @@ impl GameEngine {
                 );
             }
             snake.bodies.pop_back();
-            snake.bodies.push_front(new_head.clone());
+            snake.bodies.push_front(new_head);
 
             let mut eaten_pellets: Vec<Uuid> = Vec::new();
 
@@ -132,7 +130,7 @@ impl GameEngine {
 
                 // Eat pellets
                 if pellet.position.distance2(&new_head) < (snake.size.pow(2) as f32) {
-                    snake.bodies.push_back(snake.get_tail().clone());
+                    snake.bodies.push_back(snake.get_tail().to_owned());
                     eaten_pellets.push(*id);
                 }
             }
@@ -246,7 +244,6 @@ impl GameEngine {
             let mut bodies: VecDeque<Coordinate> = VecDeque::new();
             for body in snake.bodies.iter() {
                 if body.is_in_rectangle(x0, y0, width, height) {
-                    let body = body.clone();
                     bodies.push_back(Coordinate {
                         x: (body.x - x0 + FIELD_SIZE) % FIELD_SIZE,
                         y: (body.y - y0 + FIELD_SIZE) % FIELD_SIZE,

@@ -26,7 +26,7 @@ pub struct Pellet {
 impl Pellet {
     pub fn new(initial_position: Coordinate) -> Pellet {
         Pellet {
-            center: initial_position.clone(),
+            center: initial_position,
             radius: rand::thread_rng().gen_range(0.5, 5.),
             position: initial_position,
             size: rand::thread_rng().gen_range(1, 4),
@@ -41,7 +41,7 @@ impl Pellet {
         size: u8,
     ) -> Pellet {
         Pellet {
-            center: initial_position.clone(),
+            center: initial_position,
             radius: Rng::gen_range(&mut rand::thread_rng(), 0.5, 5.0),
             position: initial_position,
             size,
