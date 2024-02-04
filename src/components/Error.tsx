@@ -1,8 +1,15 @@
 import styles from "./Error.module.scss";
 
-export default function ErrorModal() {
+interface ErrorProps {
+  transparent?: boolean;
+}
+
+export default function ErrorModal({ transparent }: ErrorProps) {
   return (
-    <dialog className={styles.modal}>
+    <dialog
+      className={styles.errorRoot}
+      style={{ backgroundColor: transparent ? "#00000033" : "#000" }}
+    >
       <div className={styles.content}>
         <div className={styles.header}>
           <img

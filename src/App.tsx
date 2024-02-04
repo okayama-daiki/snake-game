@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Lobby from "./components/Lobby";
 import Game from "./components/Game";
-import ErrorModal from "./components/Modal/Error";
+import Error from "./components/Error";
 import { ConnectionStatus, PlayerStatus } from "./types";
 import init from "renderer";
 
@@ -28,7 +28,9 @@ export default function App() {
 
   return (
     <main>
-      {connectionStatus == ConnectionStatus.CLOSED && <ErrorModal />}
+      {connectionStatus == ConnectionStatus.CLOSED && (
+        <Error transparent={playerStatus == PlayerStatus.PLAYING} />
+      )}
       {playerStatus == PlayerStatus.PLAYING && (
         <Game
           socket={socket}
@@ -36,12 +38,10 @@ export default function App() {
         />
       )}
       {playerStatus == PlayerStatus.NOT_PLAYING && (
-        <>
-          <Lobby
-            connectionStatus={connectionStatus}
-            toGame={() => setPlayerStatus(PlayerStatus.PLAYING)}
-          />
-        </>
+        <Lobby
+          connectionStatus={connectionStatus}
+          toGame={() => setPlayerStatus(PlayerStatus.PLAYING)}
+        />
       )}
     </main>
   );
