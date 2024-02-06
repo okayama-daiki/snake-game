@@ -1,4 +1,5 @@
 import styles from "./Error.module.scss";
+import src from "../assets/error.webp";
 
 interface ErrorProps {
   transparent?: boolean;
@@ -13,7 +14,7 @@ export default function ErrorModal({ transparent }: ErrorProps) {
       <div className={styles.content}>
         <div className={styles.header}>
           <img
-            src="/snake-game/error.webp"
+            src={src}
             alt="error icon"
             width={150}
             height={150}
