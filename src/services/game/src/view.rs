@@ -2,7 +2,6 @@ use ciborium::{de::from_reader, ser::into_writer};
 use serde::{Deserialize, Serialize};
 
 use super::coordinate::Coordinate;
-use super::map::Map;
 use super::pellet::Pellet;
 use super::snake::Snake;
 
@@ -12,7 +11,6 @@ pub struct View {
     pub snakes: Vec<Snake>,
     pub pellets: Vec<Pellet>,
     pub background_dots: Vec<Coordinate>,
-    pub map: Option<Map>,
 }
 
 impl View {

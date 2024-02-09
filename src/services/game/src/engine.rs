@@ -228,6 +228,36 @@ impl GameEngine {
         }
     }
 
+    pub fn map(&self, cx: f32, cy: f32) -> Map {
+        const SIZE: usize = 100;
+        let cell_size = FIELD_SIZE / SIZE as f32;
+
+        // TODO: `arr` is the same for all users on every frame. Consider caching the value.
+        let mut arr = vec![vec![0; SIZE]; SIZE];
+        for (_, snake) in self.snakes.iter() {
+            for body in snake.bodies.iter() {
+                let x = (body.x / cell_size).floor() as usize;
+                let y = (body.y / cell_size).floor() as usize;
+                arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
+            }
+        }
+        for (_, pellet) in self.pellets.iter() {
+            let x = (pellet.position.x / cell_size).floor() as usize;
+            let y = (pellet.position.y / cell_size).floor() as usize;
+            arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
+        }
+
+        let self_coordinate = (
+            (cx / cell_size).floor() as usize,
+            (cy / cell_size).floor() as usize,
+        );
+
+        Map {
+            map: arr,
+            self_coordinate,
+        }
+    }
+
     pub fn view(&self, id: &Uuid, cx: f32, cy: f32, width: f32, height: f32) -> View {
         //! Get the view of the game.
         //! The view is centered at (cx, cy) with width and height.
@@ -272,40 +302,7 @@ impl GameEngine {
             }
         }
 
-        // 3. Create the map
-        const SIZE: usize = 100;
-        let cell_size = FIELD_SIZE / SIZE as f32;
-
-        // TODO: `arr` is the same for all users on every frame. Consider caching the value.
-        let mut arr = vec![vec![0; SIZE]; SIZE];
-        for (_, snake) in self.snakes.iter() {
-            for body in snake.bodies.iter() {
-                let x = (body.x / cell_size).floor() as usize;
-                let y = (body.y / cell_size).floor() as usize;
-                arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
-            }
-        }
-        for (_, pellet) in self.pellets.iter() {
-            let x = (pellet.position.x / cell_size).floor() as usize;
-            let y = (pellet.position.y / cell_size).floor() as usize;
-            arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
-        }
-
-        let self_coordinate = (
-            (cx / cell_size).floor() as usize,
-            (cy / cell_size).floor() as usize,
-        );
-
-        let map = if self.frame_count % 30 == 0 {
-            Some(Map {
-                map: arr,
-                self_coordinate,
-            })
-        } else {
-            None
-        };
-
-        // 4. Get background_dots in the rectangle
+        // 3. Get background_dots in the rectangle
         let mut background_dots: Vec<Coordinate> = Vec::new();
 
         for x in 0..100 {
@@ -328,7 +325,6 @@ impl GameEngine {
             snakes,
             pellets,
             background_dots,
-            map,
         }
     }
 }

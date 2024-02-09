@@ -218,9 +218,9 @@ fn render(
     render_background(context, &message.background_dots);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
-    if let Some(map) = &message.map {
-        update_minimap(minimap_context, map);
-    }
+    // if let Some(map) = &message.map {
+    //     update_minimap(minimap_context, map);
+    // }
     render_minimap(context, minimap_context);
 }
 
