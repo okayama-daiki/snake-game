@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct WebsocketMessage(pub Vec<u8>);
+pub struct WebsocketMessage(pub String);
 
 #[derive(Message)]
 #[rtype(result = "()")]

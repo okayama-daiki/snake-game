@@ -2,12 +2,14 @@ use crate::messages::{ClientMessage, Connect, Disconnect, WebsocketMessage};
 use actix::{Actor, AsyncContext, Context, Handler, Recipient};
 use game::coordinate::Coordinate;
 use game::engine::GameEngine;
+use serde_json::to_string;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
 const FPS: u64 = 30;
 const FRAME_INTERVAL: Duration = Duration::from_millis(1000 / FPS);
+const MAP_INTERVAL: Duration = Duration::from_millis(1000);
 
 #[derive(Default)]
 struct WindowSize {
@@ -55,15 +57,27 @@ impl Actor for WebsocketActor {
                 if session.additional_send_frame_count > 0 {
                     session.additional_send_frame_count -= 1;
                     session.addr.do_send(WebsocketMessage(
-                        act.engine
-                            .view(
-                                id,
-                                session.center_coordinate.x,
-                                session.center_coordinate.y,
-                                (session.window_size.width + 100).into(),
-                                (session.window_size.height + 100).into(),
-                            )
-                            .to_bytes(),
+                        to_string(&act.engine.view(
+                            id,
+                            session.center_coordinate.x,
+                            session.center_coordinate.y,
+                            (session.window_size.width + 100).into(),
+                            (session.window_size.height + 100).into(),
+                        ))
+                        .unwrap(),
+                    ));
+                }
+            }
+        });
+        ctx.run_interval(MAP_INTERVAL, |act, _| {
+            for (_, session) in act.sessions.iter_mut() {
+                if session.is_playing {
+                    session.addr.do_send(WebsocketMessage(
+                        to_string(
+                            &act.engine
+                                .map(session.center_coordinate.x, session.center_coordinate.y),
+                        )
+                        .unwrap(),
                     ));
                 }
             }

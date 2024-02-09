@@ -1,4 +1,5 @@
 use game::{coordinate::Coordinate, map::Map, pellet::Pellet, snake::Snake, view::View as Message};
+use serde_json::from_str;
 
 #[macro_use]
 mod browser;
@@ -13,8 +14,8 @@ use wasm_bindgen::{
     JsCast,
 };
 use web_sys::{
-    js_sys::{ArrayBuffer, Function, Uint8Array},
-    BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
+    js_sys::Function, BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent,
+    WebSocket,
 };
 
 static MINIMAP_SIZE: f64 = 100.;
@@ -126,26 +127,30 @@ impl RenderEngine {
                 }
 
                 // 3.1. Parse the message into a Message struct and render the Message.
-                let array_buffer = e.data().dyn_into::<ArrayBuffer>().unwrap();
-                let array = Uint8Array::new(&array_buffer);
-                let message: Message = Message::from_bytes(&array.to_vec());
+                let data = e.data().as_string().unwrap();
+                if let Ok(message) = from_str::<Message>(data.as_str()) {
+                    // if the snake is dead, gradually darken the screen and call the callback function when the screen is completely dark.
+                    if !message.is_alive && is_alive.get() {
+                        is_alive.set(false);
+                        frame_after_death.set(1);
+                    }
+                    if !is_alive.get() {
+                        frame_after_death.set(frame_after_death.get() + 1);
+                    }
+                    if frame_after_death.get() == 150 {
+                        callback.call0(&JsValue::NULL).unwrap();
+                    }
+                    context.set_global_alpha(
+                        1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.,
+                    );
+                    render(&context, &minimap_context, &message);
+                }
 
-                // 3.2. if the snake is dead, gradually darken the screen and call the callback function when the screen is completely dark.
-                if !message.is_alive && is_alive.get() {
-                    is_alive.set(false);
-                    frame_after_death.set(1);
+                if let Ok(map) = from_str::<Map>(data.as_str()) {
+                    update_minimap(&minimap_context, &map);
                 }
-                if !is_alive.get() {
-                    frame_after_death.set(frame_after_death.get() + 1);
-                }
-                if frame_after_death.get() == 150 {
-                    callback.call0(&JsValue::NULL).unwrap();
-                }
-                context
-                    .set_global_alpha(1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.);
-                render(&context, &minimap_context, &message);
 
-                // 3.3. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
+                // 3.2. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
                 if is_alive.get() {
                     let dir = vector(&get_center_coordinate(), &get_mouse_position());
                     socket
@@ -218,9 +223,6 @@ fn render(
     render_background(context, &message.background_dots);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
-    // if let Some(map) = &message.map {
-    //     update_minimap(minimap_context, map);
-    // }
     render_minimap(context, minimap_context);
 }
 
