@@ -4,6 +4,7 @@ use actix::{
     fut, Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler,
     Running, StreamHandler, WrapFuture,
 };
+use actix_web::web::Bytes;
 use actix_web_actors::ws;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -104,6 +105,6 @@ impl Handler<WebsocketMessage> for WebsocketSession {
     type Result = ();
 
     fn handle(&mut self, msg: WebsocketMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
+        ctx.binary(Bytes::from(msg.0));
     }
 }

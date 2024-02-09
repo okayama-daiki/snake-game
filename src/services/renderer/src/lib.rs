@@ -14,8 +14,8 @@ use wasm_bindgen::{
     JsCast,
 };
 use web_sys::{
-    js_sys::Function, BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent,
-    WebSocket,
+    js_sys::{ArrayBuffer, Function, Uint8Array},
+    BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
 };
 
 static MINIMAP_SIZE: f64 = 100.;
@@ -127,8 +127,11 @@ impl RenderEngine {
                 }
 
                 // 3.1. Parse the message into a Message struct and render the Message.
-                let data = e.data().as_string().unwrap();
-                if let Ok(message) = from_str::<Message>(data.as_str()) {
+                let array_buffer = e.data().dyn_into::<ArrayBuffer>().unwrap();
+                let array = Uint8Array::new(&array_buffer);
+                let vec = array.to_vec();
+
+                if let Ok(message) = Message::from_bytes(&vec) {
                     // if the snake is dead, gradually darken the screen and call the callback function when the screen is completely dark.
                     if !message.is_alive && is_alive.get() {
                         is_alive.set(false);
@@ -146,7 +149,7 @@ impl RenderEngine {
                     render(&context, &minimap_context, &message);
                 }
 
-                if let Ok(map) = from_str::<Map>(data.as_str()) {
+                if let Ok(map) = Map::from_bytes(&vec) {
                     update_minimap(&minimap_context, &map);
                 }
 
