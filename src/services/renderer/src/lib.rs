@@ -1,5 +1,4 @@
 use game::{coordinate::Coordinate, map::Map, pellet::Pellet, snake::Snake, view::View as Message};
-use serde_json::from_str;
 
 #[macro_use]
 mod browser;
