@@ -7,6 +7,5 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 8000,
   },
-  base: "/snake-game/",
   plugins: [react()],
 });
