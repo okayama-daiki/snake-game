@@ -37,7 +37,7 @@ impl Snake {
             acceleration_time_left: 0,
             speed: initial_speed,
             size: 15,
-            color: COLORS[rand::thread_rng().gen_range(0, COLORS.len())].to_string(),
+            color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
             velocity: Coordinate { x: 0., y: 0. },
             frame_count_offset: 0,
             is_visible_head: true,

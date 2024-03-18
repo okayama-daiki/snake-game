@@ -27,10 +27,10 @@ impl Pellet {
     pub fn new(initial_position: Coordinate) -> Pellet {
         Pellet {
             center: initial_position,
-            radius: rand::thread_rng().gen_range(0.5, 5.),
+            radius: rand::thread_rng().gen_range((0.5)..5.),
             position: initial_position,
-            size: rand::thread_rng().gen_range(1, 4),
-            color: COLORS[rand::thread_rng().gen_range(0, COLORS.len())].to_string(),
+            size: rand::thread_rng().gen_range(1..4),
+            color: COLORS[rand::thread_rng().gen_range(0..COLORS.len())].to_string(),
             frame_count_offset: 0,
         }
     }
@@ -42,7 +42,7 @@ impl Pellet {
     ) -> Pellet {
         Pellet {
             center: initial_position,
-            radius: Rng::gen_range(&mut rand::thread_rng(), 0.5, 5.0),
+            radius: Rng::gen_range(&mut rand::thread_rng(), (0.5)..5.0),
             position: initial_position,
             size,
             color,
