@@ -20,6 +20,12 @@ pub async fn handle_connection(
     Ok(response)
 }
 
+#[get("/health")]
+pub async fn health() -> HttpResponse {
+    println!("Health check");
+    HttpResponse::Ok().finish()
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
@@ -42,6 +48,7 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move || {
             App::new()
                 .service(handle_connection)
+                .service(health)
                 .app_data(Data::new(websocket_server.clone()))
         })
         .bind(format!("{}:{}", host, port))?
@@ -62,6 +69,7 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move || {
             App::new()
                 .service(handle_connection)
+                .service(health)
                 .app_data(Data::new(websocket_server.clone()))
         })
         .bind_openssl(format!("{}:{}", host, port), builder)?
