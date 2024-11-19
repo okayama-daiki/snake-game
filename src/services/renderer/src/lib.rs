@@ -231,7 +231,7 @@ fn render(
 fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
     for pellet in pellets {
         let hsl = pellet_rendering_helper::to_hsl(pellet);
-        context.set_fill_style(&JsValue::from_str(&hsl));
+        context.set_fill_style_str(hsl.as_str());
         context.set_shadow_color(hsl.as_str());
         context.set_shadow_blur((pellet.size as f64) * 10.);
         context.begin_path();
@@ -255,7 +255,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
         let hsl = snake_rendering_helper::to_hsl(snake);
 
         for body in snake.bodies.iter().rev() {
-            context.set_fill_style(&JsValue::from_str("rgba(0, 0, 0, 0.3)"));
+            context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
             context.set_shadow_color("rgba(0, 0, 0, 0.3)");
             context.set_shadow_blur(10.);
             context.begin_path();
@@ -269,7 +269,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
                 )
                 .unwrap();
             context.fill();
-            context.set_fill_style(&JsValue::from_str(hsl.as_str()));
+            context.set_fill_style_str(hsl.as_str());
             context.set_shadow_color(hsl.as_str());
             context.set_shadow_blur(if snake.acceleration_time_left == 0 {
                 3.
@@ -294,7 +294,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
             let head = snake.bodies.front().unwrap();
             let theta = snake.velocity.y.atan2(snake.velocity.x) as f64;
             context.restore();
-            context.set_fill_style(&JsValue::from_str("#fff"));
+            context.set_fill_style_str("#fff");
             context.begin_path();
             context
                 .arc(
@@ -317,7 +317,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
                 )
                 .unwrap();
             context.fill();
-            context.set_fill_style(&JsValue::from_str("#000"));
+            context.set_fill_style_str("#000");
             context.begin_path();
             context
                 .arc(
@@ -353,15 +353,15 @@ fn update_minimap(minimap_context: &CanvasRenderingContext2d, map: &Map) {
     for x in 0..MINIMAP_SIZE as usize {
         for y in 0..MINIMAP_SIZE as usize {
             minimap_context.begin_path();
-            minimap_context.set_fill_style(&JsValue::from_str(
+            minimap_context.set_fill_style_str(
                 format!("rgba(255, 255, 255, {})", map.map[x][y] as f32 / 10.).as_str(),
-            ));
+            );
             minimap_context.fill_rect(x as f64, y as f64, 1., 1.);
         }
     }
 
     // Draw the coordinate axis
-    minimap_context.set_stroke_style(&JsValue::from_str("#fff"));
+    minimap_context.set_stroke_style_str("#fff");
     minimap_context.set_line_width(0.5);
     minimap_context.begin_path();
     minimap_context.move_to(MINIMAP_SIZE / 2., 0.);
@@ -371,7 +371,7 @@ fn update_minimap(minimap_context: &CanvasRenderingContext2d, map: &Map) {
     minimap_context.stroke();
 
     // Draw the self coordinate
-    minimap_context.set_fill_style(&JsValue::from_str("green"));
+    minimap_context.set_fill_style_str("green");
     minimap_context.begin_path();
     minimap_context
         .arc(
@@ -404,7 +404,7 @@ fn render_minimap(context: &CanvasRenderingContext2d, minimap_context: &CanvasRe
 }
 
 fn render_background(context: &CanvasRenderingContext2d, background_dots: &Vec<Coordinate>) {
-    context.set_fill_style(&JsValue::from_str("#222"));
+    context.set_fill_style_str("#222");
     for dot in background_dots {
         context.begin_path();
         context
