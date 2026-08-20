@@ -184,6 +184,7 @@ impl GameEngine {
         // Update snakes
         for (_, snake) in self.snakes.iter_mut() {
             let mut accelerate_factor = 1.;
+            snake.turn_towards_target();
 
             if snake.acceleration_time_left > 0 {
                 snake.acceleration_time_left -= 1;
@@ -342,20 +343,14 @@ impl GameEngine {
         }
 
         if let Some(snake) = self.snakes.get_mut(id) {
-            let weight = 0.2;
-            let new_velocity = Coordinate {
-                x: (1. - weight) * snake.velocity.x + weight * velocity.x,
-                y: (1. - weight) * snake.velocity.y + weight * velocity.y,
-            };
-            let norm = (new_velocity.x.powi(2) + new_velocity.y.powi(2)).sqrt();
+            let norm = (velocity.x.powi(2) + velocity.y.powi(2)).sqrt();
             if norm <= f32::EPSILON || !norm.is_finite() {
                 return;
             }
-            let new_velocity = Coordinate {
-                x: new_velocity.x / norm,
-                y: new_velocity.y / norm,
+            snake.target_velocity = Coordinate {
+                x: velocity.x / norm,
+                y: velocity.y / norm,
             };
-            snake.velocity = new_velocity;
         }
     }
 
