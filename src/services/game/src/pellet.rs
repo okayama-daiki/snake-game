@@ -15,11 +15,17 @@ const COLORS: [&str; 7] = [
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Pellet {
+    #[serde(skip)]
     pub center: Coordinate,
+    #[serde(skip)]
     pub radius: f32,
+    #[serde(rename = "p")]
     pub position: Coordinate,
+    #[serde(rename = "s")]
     pub size: u8,
+    #[serde(rename = "c")]
     pub color: String,
+    #[serde(rename = "f")]
     pub frame_count_offset: u32,
 }
 

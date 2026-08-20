@@ -12,6 +12,7 @@ use super::view::View;
 
 static FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
+const MAP_SIZE: usize = 100;
 
 #[derive(Default)]
 pub struct GameEngine {
@@ -100,8 +101,8 @@ impl GameEngine {
                 y: head.y + snake.velocity.y * snake.speed * accelerate_factor,
             };
             let new_head = Coordinate {
-                x: (new_head.x + FIELD_SIZE) % FIELD_SIZE,
-                y: (new_head.y + FIELD_SIZE) % FIELD_SIZE,
+                x: new_head.x.rem_euclid(FIELD_SIZE),
+                y: new_head.y.rem_euclid(FIELD_SIZE),
             };
 
             if snake.acceleration_time_left > 0 && snake.frame_count_offset % 6 == 0 {
@@ -145,11 +146,11 @@ impl GameEngine {
         // Detect collision
         let mut dead_snakes: HashSet<Uuid> = HashSet::new();
 
-        for (id1, snake1) in self.snakes.iter() {
-            for (id2, snake2) in self.snakes.iter() {
-                if id1 == id2 {
-                    continue;
-                }
+        let snake_ids: Vec<Uuid> = self.snakes.keys().copied().collect();
+        for (index, id1) in snake_ids.iter().enumerate() {
+            for id2 in snake_ids.iter().skip(index + 1) {
+                let snake1 = self.snakes.get(id1).unwrap();
+                let snake2 = self.snakes.get(id2).unwrap();
                 let head1 = snake1.get_head();
                 let head2 = snake2.get_head();
 
@@ -184,10 +185,15 @@ impl GameEngine {
                     continue;
                 }
 
-                for body2 in snake2.bodies.iter() {
-                    if head1.distance2(body2) <= ((snake1.size + snake2.size).pow(2) as f32) {
-                        dead_snakes.insert(*id1);
-                    }
+                if snake2.bodies.iter().any(|body| {
+                    head1.distance2(body) <= ((snake1.size + snake2.size).pow(2) as f32)
+                }) {
+                    dead_snakes.insert(*id1);
+                }
+                if snake1.bodies.iter().any(|body| {
+                    head2.distance2(body) <= ((snake1.size + snake2.size).pow(2) as f32)
+                }) {
+                    dead_snakes.insert(*id2);
                 }
             }
         }
@@ -213,6 +219,10 @@ impl GameEngine {
     }
 
     pub fn change_velocity(&mut self, id: &Uuid, velocity: Coordinate) {
+        if !velocity.x.is_finite() || !velocity.y.is_finite() {
+            return;
+        }
+
         if let Some(snake) = self.snakes.get_mut(id) {
             let weight = 0.2;
             let new_velocity = Coordinate {
@@ -220,6 +230,9 @@ impl GameEngine {
                 y: (1. - weight) * snake.velocity.y + weight * velocity.y,
             };
             let norm = (new_velocity.x.powi(2) + new_velocity.y.powi(2)).sqrt();
+            if norm <= f32::EPSILON || !norm.is_finite() {
+                return;
+            }
             let new_velocity = Coordinate {
                 x: new_velocity.x / norm,
                 y: new_velocity.y / norm,
@@ -229,33 +242,35 @@ impl GameEngine {
     }
 
     pub fn map(&self, cx: f32, cy: f32) -> Map {
-        const SIZE: usize = 100;
-        let cell_size = FIELD_SIZE / SIZE as f32;
+        let cell_size = FIELD_SIZE / MAP_SIZE as f32;
 
         // TODO: `arr` is the same for all users on every frame. Consider caching the value.
-        let mut arr = vec![vec![0; SIZE]; SIZE];
+        let mut arr = vec![vec![0; MAP_SIZE]; MAP_SIZE];
         for (_, snake) in self.snakes.iter() {
             for body in snake.bodies.iter() {
                 let x = (body.x / cell_size).floor() as usize;
                 let y = (body.y / cell_size).floor() as usize;
-                arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
+                arr[x.clamp(0, MAP_SIZE - 1)][y.clamp(0, MAP_SIZE - 1)] += 1;
             }
         }
         for (_, pellet) in self.pellets.iter() {
             let x = (pellet.position.x / cell_size).floor() as usize;
             let y = (pellet.position.y / cell_size).floor() as usize;
-            arr[x.clamp(0, SIZE - 1)][y.clamp(0, SIZE - 1)] += 1;
+            arr[x.clamp(0, MAP_SIZE - 1)][y.clamp(0, MAP_SIZE - 1)] += 1;
         }
-
-        let self_coordinate = (
-            (cx / cell_size).floor() as usize,
-            (cy / cell_size).floor() as usize,
-        );
 
         Map {
             map: arr,
-            self_coordinate,
+            self_coordinate: Self::map_coordinate(cx, cy),
         }
+    }
+
+    pub fn map_coordinate(cx: f32, cy: f32) -> (usize, usize) {
+        let cell_size = FIELD_SIZE / MAP_SIZE as f32;
+        let x = (cx.rem_euclid(FIELD_SIZE) / cell_size).floor() as usize;
+        let y = (cy.rem_euclid(FIELD_SIZE) / cell_size).floor() as usize;
+
+        (x.min(MAP_SIZE - 1), y.min(MAP_SIZE - 1))
     }
 
     pub fn view(&self, id: &Uuid, cx: f32, cy: f32, width: f32, height: f32) -> View {
@@ -275,17 +290,19 @@ impl GameEngine {
             for body in snake.bodies.iter() {
                 if body.is_in_rectangle(x0, y0, width, height) {
                     bodies.push_back(Coordinate {
-                        x: (body.x - x0 + FIELD_SIZE) % FIELD_SIZE,
-                        y: (body.y - y0 + FIELD_SIZE) % FIELD_SIZE,
+                        x: (body.x - x0).rem_euclid(FIELD_SIZE),
+                        y: (body.y - y0).rem_euclid(FIELD_SIZE),
                     });
                 }
             }
             let is_visible_head = snake.bodies[0].is_in_rectangle(x0, y0, width, height);
-            snakes.push(Snake {
-                bodies,
-                is_visible_head,
-                ..snake
-            });
+            if !bodies.is_empty() {
+                snakes.push(Snake {
+                    bodies,
+                    is_visible_head,
+                    ..snake
+                });
+            }
         }
 
         // 2. Get pellets in the rectangle
@@ -294,29 +311,11 @@ impl GameEngine {
                 let pellet = pellet.clone();
                 pellets.push(Pellet {
                     position: Coordinate {
-                        x: (pellet.position.x - x0 + FIELD_SIZE) % FIELD_SIZE,
-                        y: (pellet.position.y - y0 + FIELD_SIZE) % FIELD_SIZE,
+                        x: (pellet.position.x - x0).rem_euclid(FIELD_SIZE),
+                        y: (pellet.position.y - y0).rem_euclid(FIELD_SIZE),
                     },
                     ..pellet
                 });
-            }
-        }
-
-        // 3. Get background_dots in the rectangle
-        let mut background_dots: Vec<Coordinate> = Vec::new();
-
-        for x in 0..100 {
-            for y in 0..100 {
-                let hex = Coordinate {
-                    x: (x * 100) as f32,
-                    y: (y * 100) as f32,
-                };
-                if hex.is_in_rectangle(x0, y0, width, height) {
-                    background_dots.push(Coordinate {
-                        x: (hex.x - x0 + FIELD_SIZE) % FIELD_SIZE,
-                        y: (hex.y - y0 + FIELD_SIZE) % FIELD_SIZE,
-                    });
-                }
             }
         }
 
@@ -324,7 +323,50 @@ impl GameEngine {
             is_alive: self.snakes.contains_key(id),
             snakes,
             pellets,
-            background_dots,
+            background_offset: Coordinate {
+                x: (-x0).rem_euclid(100.0),
+                y: (-y0).rem_euclid(100.0),
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignores_invalid_velocity() {
+        let id = Uuid::new_v4();
+        let mut engine = GameEngine::new();
+        engine.add_snake(id);
+
+        engine.change_velocity(&id, Coordinate { x: 0.0, y: 0.0 });
+        engine.change_velocity(
+            &id,
+            Coordinate {
+                x: f32::NAN,
+                y: 1.0,
+            },
+        );
+
+        assert_eq!(
+            engine.get_snake(&id).unwrap().velocity,
+            Coordinate { x: 0.0, y: 0.0 }
+        );
+    }
+
+    #[test]
+    fn equal_head_collision_removes_exactly_one_snake() {
+        let mut engine = GameEngine::new();
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        let position = Coordinate { x: 100.0, y: 100.0 };
+        engine.snakes.insert(first, Snake::new(position, 0.0));
+        engine.snakes.insert(second, Snake::new(position, 0.0));
+
+        engine.forward();
+
+        assert_eq!(engine.snakes.len(), 1);
     }
 }

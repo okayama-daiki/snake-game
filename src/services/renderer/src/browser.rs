@@ -45,8 +45,13 @@ pub fn get_context(canvas: &HtmlCanvasElement) -> CanvasRenderingContext2d {
         .unwrap()
 }
 
-pub fn create_mouse_position_getter() -> Box<dyn Fn() -> Coordinate> {
-    //! Returns a getter function that returns the current mouse position.
+pub struct MousePositionTracker {
+    pub position: Rc<Cell<Coordinate>>,
+    pub handler: Closure<dyn FnMut(MouseEvent)>,
+}
+
+pub fn create_mouse_position_tracker() -> MousePositionTracker {
+    //! Returns the current mouse position and its event handler.
     //!
     //! Since there is no property like window.mouse_location, the mouse position
     //! can be declared within this function, rewritten by the event handler, and
@@ -54,21 +59,18 @@ pub fn create_mouse_position_getter() -> Box<dyn Fn() -> Coordinate> {
 
     let mouse_position = Coordinate { x: 0., y: 0. };
     let mouse_position = Rc::new(Cell::new(mouse_position));
-    let window = window().unwrap();
-    {
-        let mouse_position_clone = mouse_position.clone();
-        let closure = Closure::wrap(Box::new(move |e: MouseEvent| {
-            mouse_position_clone.set(Coordinate {
-                x: e.client_x() as f32,
-                y: e.client_y() as f32,
-            });
-        }) as Box<dyn FnMut(MouseEvent)>);
-        window.set_onmousemove(Some(closure.as_ref().unchecked_ref()));
-        closure.forget();
-    }
+    let mouse_position_clone = mouse_position.clone();
+    let handler = Closure::wrap(Box::new(move |e: MouseEvent| {
+        mouse_position_clone.set(Coordinate {
+            x: e.client_x() as f32,
+            y: e.client_y() as f32,
+        });
+    }) as Box<dyn FnMut(MouseEvent)>);
 
-    let getter = move || mouse_position.get();
-    Box::new(getter)
+    MousePositionTracker {
+        position: mouse_position,
+        handler,
+    }
 }
 
 pub fn now() -> Result<f64> {

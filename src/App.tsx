@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Lobby from "./components/Lobby";
 import Game from "./components/Game";
 import Error from "./components/Error";
@@ -16,15 +16,36 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState(
     ConnectionStatus.CONNECTING
   );
+  const toLobby = useCallback(
+    () => setPlayerStatus(PlayerStatus.NOT_PLAYING),
+    []
+  );
+  const toGame = useCallback(() => setPlayerStatus(PlayerStatus.PLAYING), []);
 
   useEffect(() => {
-    socket.onopen = () => {
+    const handleOpen = () => {
       setConnectionStatus(ConnectionStatus.OPEN);
     };
-    socket.onclose = () => {
+    const handleClose = () => {
       setConnectionStatus(ConnectionStatus.CLOSED);
     };
-  });
+
+    socket.addEventListener("open", handleOpen);
+    socket.addEventListener("close", handleClose);
+
+    // The socket is created before React mounts, so it may already be open by
+    // the time these event listeners are registered.
+    if (socket.readyState === WebSocket.OPEN) {
+      handleOpen();
+    } else if (socket.readyState === WebSocket.CLOSED) {
+      handleClose();
+    }
+
+    return () => {
+      socket.removeEventListener("open", handleOpen);
+      socket.removeEventListener("close", handleClose);
+    };
+  }, []);
 
   return (
     <main>
@@ -34,13 +55,13 @@ export default function App() {
       {playerStatus == PlayerStatus.PLAYING && (
         <Game
           socket={socket}
-          toLobby={() => setPlayerStatus(PlayerStatus.NOT_PLAYING)}
+          toLobby={toLobby}
         />
       )}
       {playerStatus == PlayerStatus.NOT_PLAYING && (
         <Lobby
           connectionStatus={connectionStatus}
-          toGame={() => setPlayerStatus(PlayerStatus.PLAYING)}
+          toGame={toGame}
         />
       )}
     </main>

@@ -9,6 +9,15 @@ use uuid::Uuid;
 const FPS: u64 = 30;
 const FRAME_INTERVAL: Duration = Duration::from_millis(1000 / FPS);
 const MAP_INTERVAL: Duration = Duration::from_millis(1000);
+const MAX_WINDOW_SIZE: u16 = 8192;
+
+#[derive(Debug, PartialEq)]
+enum ClientCommand {
+    Start,
+    Accelerate,
+    Velocity(Coordinate),
+    WindowSize { width: u16, height: u16 },
+}
 
 #[derive(Default)]
 struct WindowSize {
@@ -70,13 +79,14 @@ impl Actor for WebsocketActor {
             }
         });
         ctx.run_interval(MAP_INTERVAL, |act, _| {
+            let mut map = act.engine.map(0.0, 0.0);
             for (_, session) in act.sessions.iter_mut() {
                 if session.is_playing {
-                    session.addr.do_send(WebsocketMessage(
-                        act.engine
-                            .map(session.center_coordinate.x, session.center_coordinate.y)
-                            .to_bytes(),
-                    ));
+                    map.self_coordinate = GameEngine::map_coordinate(
+                        session.center_coordinate.x,
+                        session.center_coordinate.y,
+                    );
+                    session.addr.do_send(WebsocketMessage(map.to_bytes()));
                 }
             }
         });
@@ -115,12 +125,12 @@ impl Handler<ClientMessage> for WebsocketActor {
 
     fn handle(&mut self, msg: ClientMessage, _: &mut Context<Self>) {
         let id = &msg.id;
-        let mut iter = msg.msg.split(' ');
+        let Some(command) = parse_client_message(&msg.msg) else {
+            return;
+        };
 
-        let query = iter.next().unwrap();
-
-        match query {
-            "s" => {
+        match command {
+            ClientCommand::Start => {
                 if self.engine.get_snake(id).is_none() {
                     self.engine.add_snake(*id);
                 }
@@ -128,25 +138,79 @@ impl Handler<ClientMessage> for WebsocketActor {
                     snake.is_playing = true;
                 }
             }
-            "a" => {
+            ClientCommand::Accelerate => {
                 if let Some(snake) = self.engine.get_snake_mut(id) {
                     snake.accelerate();
                 }
             }
-            "v" => {
-                let x = iter.next().unwrap().parse::<f32>().unwrap();
-                let y = iter.next().unwrap().parse::<f32>().unwrap();
-                self.engine.change_velocity(id, Coordinate { x, y });
+            ClientCommand::Velocity(velocity) => {
+                self.engine.change_velocity(id, velocity);
             }
-            "w" => {
-                let width = iter.next().unwrap().parse::<u16>().unwrap();
-                let height = iter.next().unwrap().parse::<u16>().unwrap();
+            ClientCommand::WindowSize { width, height } => {
                 if let Some(session) = self.sessions.get_mut(id) {
-                    session.window_size.height = height;
-                    session.window_size.width = width;
+                    session.window_size.height = height.clamp(1, MAX_WINDOW_SIZE);
+                    session.window_size.width = width.clamp(1, MAX_WINDOW_SIZE);
                 }
             }
-            _ => {}
         }
+    }
+}
+
+fn parse_client_message(message: &str) -> Option<ClientCommand> {
+    let mut parts = message.split_whitespace();
+    let command = parts.next()?;
+
+    let parsed = match command {
+        "s" => ClientCommand::Start,
+        "a" => ClientCommand::Accelerate,
+        "v" => {
+            let x = parts.next()?.parse::<f32>().ok()?;
+            let y = parts.next()?.parse::<f32>().ok()?;
+            if !x.is_finite() || !y.is_finite() {
+                return None;
+            }
+            ClientCommand::Velocity(Coordinate { x, y })
+        }
+        "w" => ClientCommand::WindowSize {
+            width: parts.next()?.parse::<u16>().ok()?,
+            height: parts.next()?.parse::<u16>().ok()?,
+        },
+        _ => return None,
+    };
+
+    if parts.next().is_some() {
+        return None;
+    }
+
+    Some(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_client_messages() {
+        assert_eq!(parse_client_message("s"), Some(ClientCommand::Start));
+        assert_eq!(
+            parse_client_message("v 1 -0.5"),
+            Some(ClientCommand::Velocity(Coordinate { x: 1.0, y: -0.5 }))
+        );
+        assert_eq!(
+            parse_client_message("w 1920 1080"),
+            Some(ClientCommand::WindowSize {
+                width: 1920,
+                height: 1080,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_or_non_finite_client_messages() {
+        assert_eq!(parse_client_message(""), None);
+        assert_eq!(parse_client_message("v 1"), None);
+        assert_eq!(parse_client_message("v NaN 1"), None);
+        assert_eq!(parse_client_message("w large 1080"), None);
+        assert_eq!(parse_client_message("s extra"), None);
     }
 }

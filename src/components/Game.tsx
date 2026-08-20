@@ -17,7 +17,9 @@ export default function Game({
 
     const engine = new RenderEngine(canvas, socket, toLobby);
     engine.init();
-  }, [canvasRef, socket, toLobby]);
+
+    return () => engine.destroy();
+  }, [socket, toLobby]);
 
   return (
     <div className={styles.container}>
