@@ -537,7 +537,7 @@ fn render_snakes(
         // Draw the face
         if snake.is_visible_head {
             let head = interpolated_body(previous_snake, snake, 0, amount);
-            let theta = snake.velocity.y.atan2(snake.velocity.x) as f64;
+            let theta = interpolated_heading(previous_snake, snake, amount);
             context.set_fill_style_str("#fff");
             context.begin_path();
             context
@@ -614,6 +614,20 @@ fn interpolated_body(
     Coordinate {
         x: previous_body.x + (current_body.x - previous_body.x) * amount,
         y: previous_body.y + (current_body.y - previous_body.y) * amount,
+    }
+}
+
+fn interpolated_heading(previous: Option<&Snake>, current: &Snake, amount: f32) -> f64 {
+    let previous_velocity = previous
+        .map(|snake| snake.velocity)
+        .unwrap_or(current.velocity);
+    let x = previous_velocity.x + (current.velocity.x - previous_velocity.x) * amount;
+    let y = previous_velocity.y + (current.velocity.y - previous_velocity.y) * amount;
+
+    if x * x + y * y <= f32::EPSILON {
+        current.velocity.y.atan2(current.velocity.x) as f64
+    } else {
+        y.atan2(x) as f64
     }
 }
 
@@ -804,5 +818,17 @@ mod tests {
         let body = interpolated_body(Some(&previous), &current, 0, 0.5);
 
         assert_eq!(body, Coordinate { x: 15.0, y: 25.0 });
+    }
+
+    #[test]
+    fn snake_heading_is_interpolated_between_snapshots() {
+        let mut previous = Snake::new(Coordinate::default(), 5.0);
+        previous.velocity = Coordinate { x: 1.0, y: 0.0 };
+        let mut current = previous.clone();
+        current.velocity = Coordinate { x: 0.0, y: 1.0 };
+
+        let heading = interpolated_heading(Some(&previous), &current, 0.5);
+
+        assert!((heading - std::f64::consts::FRAC_PI_4).abs() < 1e-6);
     }
 }
