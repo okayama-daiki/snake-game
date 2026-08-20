@@ -12,7 +12,9 @@ export default function Lobby({
     <div
       className={styles.container}
       onClick={() => {
-        connectionStatus === ConnectionStatus.OPEN && toGame();
+        if (connectionStatus === ConnectionStatus.OPEN) {
+          toGame();
+        }
       }}
     >
       <h1 className={styles.title}>Snake Game</h1>
