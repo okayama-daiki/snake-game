@@ -28,6 +28,7 @@ const TARGET_FRAME_INTERVAL_MS: f64 = 1000.0 / 60.0;
 const SERVER_FRAME_INTERVAL_MS: f64 = 1000.0 / 30.0;
 const JITTER_BUFFER_FRAMES: f64 = 4.0;
 const MAX_BUFFERED_SNAPSHOTS: usize = 16;
+const SELF_SHADOW_BLUR: f64 = 7.0;
 type AnimationFrameCallback = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 
 struct Snapshot {
@@ -504,6 +505,13 @@ fn render_snakes(
         let previous_snake = matching_previous_snake(previous_snakes, snake_index, snake);
         let snake_size = interpolated_snake_size(previous_snake, snake, amount);
         let hsl = snake_rendering_helper::to_hsl(snake);
+        let head = snake
+            .is_visible_head
+            .then(|| interpolated_body(previous_snake, snake, 0, amount));
+        let is_self = head.is_some_and(|head| {
+            (head.x - self_head_position.x).abs() < 1.0
+                && (head.y - self_head_position.y).abs() < 1.0
+        });
 
         context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
         context.begin_path();
@@ -541,9 +549,33 @@ fn render_snakes(
         }
         context.fill();
 
+        // Draw the local snake from tail to head once more so that each body
+        // part casts a shadow over the parts behind it. Limiting this depth
+        // pass to the local snake avoids the old all-player shadow cost while
+        // making self-crossings readable again.
+        if is_self {
+            context.set_shadow_color("rgba(0, 0, 0, 0.55)");
+            context.set_shadow_blur(SELF_SHADOW_BLUR);
+            for (reverse_index, _) in snake.bodies.iter().rev().enumerate() {
+                let body_index = snake.bodies.len() - reverse_index - 1;
+                let body = interpolated_body(previous_snake, snake, body_index, amount);
+                context.begin_path();
+                context
+                    .arc(
+                        body.x as f64,
+                        body.y as f64,
+                        snake_size,
+                        0.0,
+                        std::f64::consts::PI * 2.0,
+                    )
+                    .unwrap();
+                context.fill();
+            }
+            context.set_shadow_blur(0.0);
+        }
+
         // Draw the face
-        if snake.is_visible_head {
-            let head = interpolated_body(previous_snake, snake, 0, amount);
+        if let Some(head) = head {
             let theta = interpolated_heading(previous_snake, snake, amount);
             let eye_distance = snake_size * 0.6;
             let left_eye = Coordinate {
@@ -554,8 +586,6 @@ fn render_snakes(
                 x: head.x + eye_distance as f32 * (theta + 35f64.to_radians()).cos() as f32,
                 y: head.y + eye_distance as f32 * (theta + 35f64.to_radians()).sin() as f32,
             };
-            let is_self = (head.x - self_head_position.x).abs() < 1.0
-                && (head.y - self_head_position.y).abs() < 1.0;
             let gaze_direction =
                 eye_gaze_direction(is_self, mouse_position, cursor_direction, theta);
             let pupil_offset = snake_size as f32 * 0.12;
