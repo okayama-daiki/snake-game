@@ -22,7 +22,11 @@ pub async fn handle_connection(
 
 #[get("/health")]
 pub async fn health() -> HttpResponse {
-    HttpResponse::Ok().finish()
+    let version =
+        env::var("RENDER_GIT_COMMIT").unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
+    HttpResponse::Ok()
+        .insert_header(("x-snake-game-version", version))
+        .finish()
 }
 
 #[actix_web::main]
@@ -74,5 +78,21 @@ async fn main() -> std::io::Result<()> {
         .bind_openssl(format!("{}:{}", host, port), builder)?
         .run()
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{http::StatusCode, test};
+
+    #[actix_web::test]
+    async fn health_response_identifies_the_deployed_version() {
+        let app = test::init_service(App::new().service(health)).await;
+        let request = test::TestRequest::get().uri("/health").to_request();
+        let response = test::call_service(&app, request).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().contains_key("x-snake-game-version"));
     }
 }
