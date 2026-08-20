@@ -127,6 +127,12 @@ impl RenderEngine {
         minimap_canvas.set_height(MINIMAP_SIZE as u32);
         minimap_canvas.set_width(MINIMAP_SIZE as u32);
         let minimap_context = get_context(&minimap_canvas);
+        let mouse_tracker = create_mouse_position_tracker();
+        window()
+            .unwrap()
+            .set_onmousemove(Some(mouse_tracker.handler.as_ref().unchecked_ref()));
+        let mouse_position = mouse_tracker.position;
+        self.on_mouse_move = Some(mouse_tracker.handler);
 
         // 3. Buffer WebSocket snapshots. Painting directly in this callback
         // made network jitter visible as dropped frames.
@@ -135,12 +141,7 @@ impl RenderEngine {
             let frame_after_death = Cell::new(0);
             let socket = self.socket.clone();
             let callback = self.callback.clone();
-            let mouse_tracker = create_mouse_position_tracker();
-            window()
-                .unwrap()
-                .set_onmousemove(Some(mouse_tracker.handler.as_ref().unchecked_ref()));
-            let mouse_position = mouse_tracker.position;
-            self.on_mouse_move = Some(mouse_tracker.handler);
+            let mouse_position = mouse_position.clone();
             let render_state = render_state.clone();
             let minimap_context = minimap_context.clone();
             let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
@@ -201,6 +202,7 @@ impl RenderEngine {
             let render_state = render_state.clone();
             let context = context.clone();
             let minimap_context = minimap_context.clone();
+            let mouse_position = mouse_position.clone();
             let mut frame_count = 0;
             let mut frame_times: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
             let mut last_callback_time = now().unwrap();
@@ -242,7 +244,7 @@ impl RenderEngine {
                                 previous.opacity
                                     + (current.opacity - previous.opacity) * amount as f64,
                             );
-                            let (background_offset, camera_shift) =
+                            let camera =
                                 interpolated_camera(&previous.message, &current.message, amount);
                             render(
                                 &context,
@@ -250,8 +252,8 @@ impl RenderEngine {
                                 Some(&previous.message),
                                 &current.message,
                                 amount,
-                                &background_offset,
-                                &camera_shift,
+                                &camera,
+                                &mouse_position.get(),
                             );
                         }
                         drop(state);
@@ -370,8 +372,8 @@ fn render(
     previous: Option<&Message>,
     current: &Message,
     amount: f32,
-    background_offset: &Coordinate,
-    camera_shift: &Coordinate,
+    camera: &(Coordinate, Coordinate),
+    mouse_position: &Coordinate,
 ) {
     context.clear_rect(
         0.0,
@@ -379,10 +381,10 @@ fn render(
         (get_width() + 100) as f64,
         (get_height() + 100) as f64,
     );
-    render_background(context, background_offset);
+    render_background(context, &camera.0);
     context.save();
     context
-        .translate(camera_shift.x as f64, camera_shift.y as f64)
+        .translate(camera.1.x as f64, camera.1.y as f64)
         .unwrap();
     render_pellets(context, &current.pellets);
     context.restore();
@@ -391,6 +393,7 @@ fn render(
         previous.map(|message| message.snakes.as_slice()),
         &current.snakes,
         amount,
+        mouse_position,
     );
     render_minimap(context, minimap_context);
 }
@@ -487,8 +490,15 @@ fn render_snakes(
     previous_snakes: Option<&[Snake]>,
     snakes: &[Snake],
     amount: f32,
+    mouse_position: &Coordinate,
 ) {
     context.set_shadow_blur(0.0);
+    let screen_center = get_center_coordinate();
+    let self_head_position = Coordinate {
+        x: screen_center.x + GLOBAL_MARGIN as f32,
+        y: screen_center.y + GLOBAL_MARGIN as f32,
+    };
+    let cursor_direction = vector(&screen_center, mouse_position);
     for (snake_index, snake) in snakes.iter().enumerate() {
         // Draw the body
         let previous_snake = previous_snakes
@@ -538,51 +548,57 @@ fn render_snakes(
         if snake.is_visible_head {
             let head = interpolated_body(previous_snake, snake, 0, amount);
             let theta = interpolated_heading(previous_snake, snake, amount);
+            let eye_distance = snake.size as f64 * 0.6;
+            let left_eye = Coordinate {
+                x: head.x + eye_distance as f32 * (theta - 35f64.to_radians()).cos() as f32,
+                y: head.y + eye_distance as f32 * (theta - 35f64.to_radians()).sin() as f32,
+            };
+            let right_eye = Coordinate {
+                x: head.x + eye_distance as f32 * (theta + 35f64.to_radians()).cos() as f32,
+                y: head.y + eye_distance as f32 * (theta + 35f64.to_radians()).sin() as f32,
+            };
+            let is_self = (head.x - self_head_position.x).abs() < 1.0
+                && (head.y - self_head_position.y).abs() < 1.0;
+            let gaze_direction =
+                eye_gaze_direction(is_self, mouse_position, cursor_direction, theta);
+            let pupil_offset = snake.size as f32 * 0.12;
+
             context.set_fill_style_str("#fff");
             context.begin_path();
-            context
-                .arc(
-                    head.x as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
-                    head.y as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
-                    snake.size as f64 * 0.3,
-                    0.,
-                    std::f64::consts::PI * 2.,
-                )
-                .unwrap();
+            for eye in [left_eye, right_eye] {
+                let radius = snake.size as f64 * 0.3;
+                context.move_to(eye.x as f64 + radius, eye.y as f64);
+                context
+                    .arc(
+                        eye.x as f64,
+                        eye.y as f64,
+                        radius,
+                        0.,
+                        std::f64::consts::PI * 2.,
+                    )
+                    .unwrap();
+            }
             context.fill();
-            context.begin_path();
-            context
-                .arc(
-                    head.x as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
-                    head.y as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
-                    snake.size as f64 * 0.3,
-                    0.,
-                    std::f64::consts::PI * 2.,
-                )
-                .unwrap();
-            context.fill();
+
             context.set_fill_style_str("#000");
             context.begin_path();
-            context
-                .arc(
-                    head.x as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).cos(),
-                    head.y as f64 + (snake.size as f64) * 0.6 * (theta - 35f64.to_radians()).sin(),
-                    snake.size as f64 * 0.15,
-                    0.,
-                    std::f64::consts::PI * 2.,
-                )
-                .unwrap();
-            context.fill();
-            context.begin_path();
-            context
-                .arc(
-                    head.x as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).cos(),
-                    head.y as f64 + (snake.size as f64) * 0.6 * (theta + 35f64.to_radians()).sin(),
-                    snake.size as f64 * 0.15,
-                    0.,
-                    std::f64::consts::PI * 2.,
-                )
-                .unwrap();
+            for eye in [left_eye, right_eye] {
+                let pupil = Coordinate {
+                    x: eye.x + gaze_direction.x * pupil_offset,
+                    y: eye.y + gaze_direction.y * pupil_offset,
+                };
+                let radius = snake.size as f64 * 0.15;
+                context.move_to(pupil.x as f64 + radius, pupil.y as f64);
+                context
+                    .arc(
+                        pupil.x as f64,
+                        pupil.y as f64,
+                        radius,
+                        0.,
+                        std::f64::consts::PI * 2.,
+                    )
+                    .unwrap();
+            }
             context.fill();
         }
     }
@@ -628,6 +644,22 @@ fn interpolated_heading(previous: Option<&Snake>, current: &Snake, amount: f32) 
         current.velocity.y.atan2(current.velocity.x) as f64
     } else {
         y.atan2(x) as f64
+    }
+}
+
+fn eye_gaze_direction(
+    is_self: bool,
+    mouse_position: &Coordinate,
+    cursor_direction: Coordinate,
+    heading: f64,
+) -> Coordinate {
+    if is_self && (mouse_position.x != 0.0 || mouse_position.y != 0.0) {
+        cursor_direction
+    } else {
+        Coordinate {
+            x: heading.cos() as f32,
+            y: heading.sin() as f32,
+        }
     }
 }
 
@@ -830,5 +862,27 @@ mod tests {
         let heading = interpolated_heading(Some(&previous), &current, 0.5);
 
         assert!((heading - std::f64::consts::FRAC_PI_4).abs() < 1e-6);
+    }
+
+    #[test]
+    fn player_pupils_use_the_live_cursor_direction() {
+        let mouse_position = Coordinate { x: 100.0, y: 20.0 };
+        let cursor_direction = Coordinate { x: 0.0, y: -1.0 };
+
+        let gaze = eye_gaze_direction(true, &mouse_position, cursor_direction, 0.0);
+
+        assert_eq!(gaze, cursor_direction);
+    }
+
+    #[test]
+    fn remote_pupils_follow_their_snake_heading() {
+        let gaze = eye_gaze_direction(
+            false,
+            &Coordinate { x: 100.0, y: 20.0 },
+            Coordinate { x: 0.0, y: -1.0 },
+            0.0,
+        );
+
+        assert_eq!(gaze, Coordinate { x: 1.0, y: 0.0 });
     }
 }
