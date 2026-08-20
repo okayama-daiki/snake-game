@@ -501,11 +501,8 @@ fn render_snakes(
     let cursor_direction = vector(&screen_center, mouse_position);
     for (snake_index, snake) in snakes.iter().enumerate() {
         // Draw the body
-        let previous_snake = previous_snakes
-            .and_then(|previous| previous.get(snake_index))
-            .filter(|previous| {
-                previous.color == snake.color && previous.bodies.len() == snake.bodies.len()
-            });
+        let previous_snake = matching_previous_snake(previous_snakes, snake_index, snake);
+        let snake_size = interpolated_snake_size(previous_snake, snake, amount);
         let hsl = snake_rendering_helper::to_hsl(snake);
 
         context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
@@ -513,12 +510,12 @@ fn render_snakes(
         for (reverse_index, _) in snake.bodies.iter().rev().enumerate() {
             let body_index = snake.bodies.len() - reverse_index - 1;
             let body = interpolated_body(previous_snake, snake, body_index, amount);
-            context.move_to(body.x as f64 + snake.size as f64 + 2.0, body.y as f64);
+            context.move_to(body.x as f64 + snake_size + 2.0, body.y as f64);
             context
                 .arc(
                     body.x as f64,
                     body.y as f64,
-                    snake.size as f64 + 2.0,
+                    snake_size + 2.0,
                     0.0,
                     std::f64::consts::PI * 2.0,
                 )
@@ -531,12 +528,12 @@ fn render_snakes(
         for (reverse_index, _) in snake.bodies.iter().rev().enumerate() {
             let body_index = snake.bodies.len() - reverse_index - 1;
             let body = interpolated_body(previous_snake, snake, body_index, amount);
-            context.move_to(body.x as f64 + snake.size as f64, body.y as f64);
+            context.move_to(body.x as f64 + snake_size, body.y as f64);
             context
                 .arc(
                     body.x as f64,
                     body.y as f64,
-                    snake.size as f64,
+                    snake_size,
                     0.0,
                     std::f64::consts::PI * 2.0,
                 )
@@ -548,7 +545,7 @@ fn render_snakes(
         if snake.is_visible_head {
             let head = interpolated_body(previous_snake, snake, 0, amount);
             let theta = interpolated_heading(previous_snake, snake, amount);
-            let eye_distance = snake.size as f64 * 0.6;
+            let eye_distance = snake_size * 0.6;
             let left_eye = Coordinate {
                 x: head.x + eye_distance as f32 * (theta - 35f64.to_radians()).cos() as f32,
                 y: head.y + eye_distance as f32 * (theta - 35f64.to_radians()).sin() as f32,
@@ -561,12 +558,12 @@ fn render_snakes(
                 && (head.y - self_head_position.y).abs() < 1.0;
             let gaze_direction =
                 eye_gaze_direction(is_self, mouse_position, cursor_direction, theta);
-            let pupil_offset = snake.size as f32 * 0.12;
+            let pupil_offset = snake_size as f32 * 0.12;
 
             context.set_fill_style_str("#fff");
             context.begin_path();
             for eye in [left_eye, right_eye] {
-                let radius = snake.size as f64 * 0.3;
+                let radius = snake_size * 0.3;
                 context.move_to(eye.x as f64 + radius, eye.y as f64);
                 context
                     .arc(
@@ -587,7 +584,7 @@ fn render_snakes(
                     x: eye.x + gaze_direction.x * pupil_offset,
                     y: eye.y + gaze_direction.y * pupil_offset,
                 };
-                let radius = snake.size as f64 * 0.15;
+                let radius = snake_size * 0.15;
                 context.move_to(pupil.x as f64 + radius, pupil.y as f64);
                 context
                     .arc(
@@ -602,6 +599,25 @@ fn render_snakes(
             context.fill();
         }
     }
+}
+
+fn matching_previous_snake<'a>(
+    previous_snakes: Option<&'a [Snake]>,
+    snake_index: usize,
+    current: &Snake,
+) -> Option<&'a Snake> {
+    previous_snakes
+        .and_then(|previous| previous.get(snake_index))
+        .filter(|previous| previous.color == current.color)
+}
+
+fn interpolated_snake_size(previous: Option<&Snake>, current: &Snake, amount: f32) -> f64 {
+    let current_size = current.size as f64;
+    let previous_size = previous
+        .map(|snake| snake.size as f64)
+        .unwrap_or(current_size);
+
+    previous_size + (current_size - previous_size) * amount as f64
 }
 
 fn interpolated_body(
@@ -850,6 +866,32 @@ mod tests {
         let body = interpolated_body(Some(&previous), &current, 0, 0.5);
 
         assert_eq!(body, Coordinate { x: 15.0, y: 25.0 });
+    }
+
+    #[test]
+    fn snake_bodies_remain_interpolated_when_length_changes() {
+        let previous = Snake::new(Coordinate { x: 10.0, y: 20.0 }, 5.0);
+        let mut current = previous.clone();
+        current.bodies[0] = Coordinate { x: 20.0, y: 30.0 };
+        current.bodies.push_back(Coordinate { x: 10.0, y: 20.0 });
+        let previous_snakes = [previous];
+        let previous_snake = matching_previous_snake(Some(&previous_snakes), 0, &current);
+
+        let body = interpolated_body(previous_snake, &current, 0, 0.5);
+
+        assert_eq!(body, Coordinate { x: 15.0, y: 25.0 });
+    }
+
+    #[test]
+    fn snake_size_is_interpolated_between_snapshots() {
+        let mut previous = Snake::new(Coordinate::default(), 5.0);
+        previous.size = 15;
+        let mut current = previous.clone();
+        current.size = 17;
+
+        let size = interpolated_snake_size(Some(&previous), &current, 0.5);
+
+        assert!((size - 16.0).abs() < f64::EPSILON);
     }
 
     #[test]
