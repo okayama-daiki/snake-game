@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{HashMap, HashSet, VecDeque};
 // TODO: Consider using BuildHasher trait
 use std::cmp::Ordering;
@@ -31,8 +31,8 @@ impl GameEngine {
     }
 
     pub fn get_random_coordinate(&self) -> Coordinate {
-        let rx = rand::thread_rng().gen_range((0.)..1.);
-        let ry = rand::thread_rng().gen_range((0.)..1.);
+        let rx = rand::rng().random_range(0.0..1.0);
+        let ry = rand::rng().random_range(0.0..1.0);
         let x = FIELD_SIZE * rx;
         let y = FIELD_SIZE * ry;
         Coordinate { x, y }
@@ -54,9 +54,9 @@ impl GameEngine {
     pub fn remove_snake(&mut self, id: &Uuid) {
         if let Some(snake) = self.snakes.get(id) {
             for body in snake.bodies.iter() {
-                if rand::thread_rng().gen_range(0..10) < 5 {
-                    let dx = rand::thread_rng().gen_range((-10.)..10.);
-                    let dy = rand::thread_rng().gen_range((-10.)..10.);
+                if rand::rng().random_range(0..10) < 5 {
+                    let dx = rand::rng().random_range(-10.0..10.0);
+                    let dy = rand::rng().random_range(-10.0..10.0);
                     let pellet = Pellet::new_with_color_and_size(
                         Coordinate {
                             x: body.x + dx,
@@ -170,7 +170,7 @@ impl GameEngine {
                                 dead_snakes.insert(*id1);
                             }
                             Ordering::Equal => {
-                                if rand::thread_rng().gen_range(0..10) < 5 {
+                                if rand::rng().random_range(0..10) < 5 {
                                     dead_snakes.insert(*id1);
                                 } else {
                                     dead_snakes.insert(*id2);

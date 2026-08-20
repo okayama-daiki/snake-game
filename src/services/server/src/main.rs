@@ -22,7 +22,6 @@ pub async fn handle_connection(
 
 #[get("/health")]
 pub async fn health() -> HttpResponse {
-    println!("Health check");
     HttpResponse::Ok().finish()
 }
 
