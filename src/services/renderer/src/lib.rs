@@ -24,20 +24,22 @@ use web_sys::{
 static MINIMAP_SIZE: f64 = 100.;
 static GLOBAL_MARGIN: f64 = 50.;
 const PERFORMANCE_SAMPLE_COUNT: usize = 30;
-const INTERPOLATION_DELAY_MS: f64 = 40.0;
 const TARGET_FRAME_INTERVAL_MS: f64 = 1000.0 / 60.0;
+const SERVER_FRAME_INTERVAL_MS: f64 = 1000.0 / 30.0;
+const JITTER_BUFFER_FRAMES: f64 = 4.0;
+const MAX_BUFFERED_SNAPSHOTS: usize = 16;
 type AnimationFrameCallback = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 
-struct TimedMessage {
+struct Snapshot {
     message: Message,
-    received_at: f64,
     opacity: f64,
+    sequence: u64,
 }
 
 #[derive(Default)]
 struct RenderState {
-    previous: Option<TimedMessage>,
-    current: Option<TimedMessage>,
+    snapshots: VecDeque<Snapshot>,
+    next_sequence: u64,
 }
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
@@ -159,12 +161,16 @@ impl RenderEngine {
                         callback.call0(&JsValue::NULL).unwrap();
                     }
                     let mut state = render_state.borrow_mut();
-                    state.previous = state.current.take();
-                    state.current = Some(TimedMessage {
+                    let sequence = state.next_sequence;
+                    state.next_sequence += 1;
+                    state.snapshots.push_back(Snapshot {
                         message,
-                        received_at: now().unwrap(),
                         opacity: 1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.,
+                        sequence,
                     });
+                    if state.snapshots.len() > MAX_BUFFERED_SNAPSHOTS {
+                        state.snapshots.pop_front();
+                    }
                 }
 
                 if let Ok(map) = Map::from_bytes(&vec) {
@@ -184,9 +190,9 @@ impl RenderEngine {
             self.on_message = Some(on_message);
         }
 
-        // 4. Paint at the display refresh rate and interpolate the camera one
-        // network frame behind. This keeps 30 Hz server snapshots smooth on
-        // 60/120 Hz displays and absorbs small variations in delivery time.
+        // 4. Paint at 60 Hz from a short jitter buffer. Render's proxy delivers
+        // several 30 Hz snapshots in bursts, so arrival timestamps cannot be
+        // used as the game timeline.
         {
             let animation_frame_callback: AnimationFrameCallback = Rc::new(RefCell::new(None));
             let animation_frame_id = Rc::new(Cell::new(None));
@@ -200,6 +206,7 @@ impl RenderEngine {
             let mut last_callback_time = now().unwrap();
             let mut last_render_time = last_callback_time;
             let mut accumulated_time = TARGET_FRAME_INTERVAL_MS;
+            let mut playback_position: Option<f64> = None;
 
             *animation_frame_callback.borrow_mut() =
                 Some(Closure::wrap(Box::new(move |timestamp: f64| {
@@ -215,17 +222,34 @@ impl RenderEngine {
                         frame_times.push_back(frame_duration);
 
                         let state = render_state.borrow();
-                        if let Some(current) = state.current.as_ref() {
-                            context.set_global_alpha(current.opacity);
-                            let (background_offset, camera_shift) = interpolated_camera(
-                                state.previous.as_ref(),
-                                current,
-                                timestamp - INTERPOLATION_DELAY_MS,
+                        if playback_position.is_none()
+                            && state.snapshots.len() > JITTER_BUFFER_FRAMES as usize
+                        {
+                            let newest = state.snapshots.back().unwrap().sequence as f64;
+                            playback_position = Some(newest - JITTER_BUFFER_FRAMES);
+                        }
+                        if let Some(position) = playback_position.as_mut() {
+                            let oldest = state.snapshots.front().unwrap().sequence as f64;
+                            let newest = state.snapshots.back().unwrap().sequence as f64;
+                            let buffered_frames = newest - *position;
+                            *position += frame_duration / SERVER_FRAME_INTERVAL_MS
+                                * playback_rate(buffered_frames);
+                            *position = position.clamp(oldest, newest);
+
+                            let (previous, current, amount) =
+                                snapshot_pair(&state.snapshots, *position).unwrap();
+                            context.set_global_alpha(
+                                previous.opacity
+                                    + (current.opacity - previous.opacity) * amount as f64,
                             );
+                            let (background_offset, camera_shift) =
+                                interpolated_camera(&previous.message, &current.message, amount);
                             render(
                                 &context,
                                 &minimap_context,
+                                Some(&previous.message),
                                 &current.message,
+                                amount,
                                 &background_offset,
                                 &camera_shift,
                             );
@@ -343,7 +367,9 @@ impl RenderEngine {
 fn render(
     context: &CanvasRenderingContext2d,
     minimap_context: &CanvasRenderingContext2d,
-    message: &Message,
+    previous: Option<&Message>,
+    current: &Message,
+    amount: f32,
     background_offset: &Coordinate,
     camera_shift: &Coordinate,
 ) {
@@ -358,51 +384,72 @@ fn render(
     context
         .translate(camera_shift.x as f64, camera_shift.y as f64)
         .unwrap();
-    render_pellets(context, &message.pellets);
-    render_snakes(context, &message.snakes);
+    render_pellets(context, &current.pellets);
     context.restore();
+    render_snakes(
+        context,
+        previous.map(|message| message.snakes.as_slice()),
+        &current.snakes,
+        amount,
+    );
     render_minimap(context, minimap_context);
 }
 
-fn interpolated_camera(
-    previous: Option<&TimedMessage>,
-    current: &TimedMessage,
-    render_time: f64,
-) -> (Coordinate, Coordinate) {
-    let Some(previous) = previous else {
-        return (current.message.background_offset, Coordinate::default());
+fn snapshot_pair(
+    snapshots: &VecDeque<Snapshot>,
+    position: f64,
+) -> Option<(&Snapshot, &Snapshot, f32)> {
+    let previous = snapshots
+        .iter()
+        .rev()
+        .find(|snapshot| snapshot.sequence as f64 <= position)
+        .or_else(|| snapshots.front())?;
+    let current = snapshots
+        .iter()
+        .find(|snapshot| snapshot.sequence as f64 >= position)
+        .or_else(|| snapshots.back())?;
+    let span = current.sequence.saturating_sub(previous.sequence) as f64;
+    let amount = if span > 0.0 {
+        ((position - previous.sequence as f64) / span) as f32
+    } else {
+        0.0
     };
-    let duration = current.received_at - previous.received_at;
-    if duration <= f64::EPSILON || duration > 250.0 {
-        return (current.message.background_offset, Coordinate::default());
-    }
 
-    let amount = ((render_time - previous.received_at) / duration).clamp(0.0, 1.0) as f32;
+    Some((previous, current, amount.clamp(0.0, 1.0)))
+}
+
+fn playback_rate(buffered_frames: f64) -> f64 {
+    if buffered_frames < 1.5 {
+        0.8
+    } else if buffered_frames > JITTER_BUFFER_FRAMES + 2.0 {
+        1.1
+    } else {
+        1.0
+    }
+}
+
+fn interpolated_camera(
+    previous: &Message,
+    current: &Message,
+    amount: f32,
+) -> (Coordinate, Coordinate) {
     let background_offset = Coordinate {
         x: lerp_wrapped(
-            previous.message.background_offset.x,
-            current.message.background_offset.x,
+            previous.background_offset.x,
+            current.background_offset.x,
             amount,
             100.0,
         ),
         y: lerp_wrapped(
-            previous.message.background_offset.y,
-            current.message.background_offset.y,
+            previous.background_offset.y,
+            current.background_offset.y,
             amount,
             100.0,
         ),
     };
     let camera_shift = Coordinate {
-        x: wrapped_delta(
-            background_offset.x,
-            current.message.background_offset.x,
-            100.0,
-        ),
-        y: wrapped_delta(
-            background_offset.y,
-            current.message.background_offset.y,
-            100.0,
-        ),
+        x: wrapped_delta(background_offset.x, current.background_offset.x, 100.0),
+        y: wrapped_delta(background_offset.y, current.background_offset.y, 100.0),
     };
 
     (background_offset, camera_shift)
@@ -435,16 +482,27 @@ fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
     }
 }
 
-fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
+fn render_snakes(
+    context: &CanvasRenderingContext2d,
+    previous_snakes: Option<&[Snake]>,
+    snakes: &[Snake],
+    amount: f32,
+) {
     context.set_shadow_blur(0.0);
-    for snake in snakes {
+    for (snake_index, snake) in snakes.iter().enumerate() {
         // Draw the body
-
+        let previous_snake = previous_snakes
+            .and_then(|previous| previous.get(snake_index))
+            .filter(|previous| {
+                previous.color == snake.color && previous.bodies.len() == snake.bodies.len()
+            });
         let hsl = snake_rendering_helper::to_hsl(snake);
 
         context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
         context.begin_path();
-        for body in snake.bodies.iter().rev() {
+        for (reverse_index, _) in snake.bodies.iter().rev().enumerate() {
+            let body_index = snake.bodies.len() - reverse_index - 1;
+            let body = interpolated_body(previous_snake, snake, body_index, amount);
             context.move_to(body.x as f64 + snake.size as f64 + 2.0, body.y as f64);
             context
                 .arc(
@@ -460,7 +518,9 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
 
         context.set_fill_style_str(hsl.as_str());
         context.begin_path();
-        for body in snake.bodies.iter().rev() {
+        for (reverse_index, _) in snake.bodies.iter().rev().enumerate() {
+            let body_index = snake.bodies.len() - reverse_index - 1;
+            let body = interpolated_body(previous_snake, snake, body_index, amount);
             context.move_to(body.x as f64 + snake.size as f64, body.y as f64);
             context
                 .arc(
@@ -476,7 +536,7 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
 
         // Draw the face
         if snake.is_visible_head {
-            let head = snake.bodies.front().unwrap();
+            let head = interpolated_body(previous_snake, snake, 0, amount);
             let theta = snake.velocity.y.atan2(snake.velocity.x) as f64;
             context.set_fill_style_str("#fff");
             context.begin_path();
@@ -525,6 +585,35 @@ fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
                 .unwrap();
             context.fill();
         }
+    }
+}
+
+fn interpolated_body(
+    previous: Option<&Snake>,
+    current: &Snake,
+    body_index: usize,
+    amount: f32,
+) -> Coordinate {
+    let current_body = current.bodies[body_index];
+    let Some(previous_body) = previous
+        .and_then(|snake| snake.bodies.get(body_index))
+        .copied()
+    else {
+        return current_body;
+    };
+
+    // A large jump means that this body crossed a wrapped viewport edge or
+    // the vector ordering changed. Interpolating that transition would sweep
+    // a circle across the whole canvas.
+    if (current_body.x - previous_body.x).abs() > 250.0
+        || (current_body.y - previous_body.y).abs() > 250.0
+    {
+        return current_body;
+    }
+
+    Coordinate {
+        x: previous_body.x + (current_body.x - previous_body.x) * amount,
+        y: previous_body.y + (current_body.y - previous_body.y) * amount,
     }
 }
 
@@ -661,6 +750,15 @@ mod snake_rendering_helper {
 mod tests {
     use super::*;
 
+    fn test_message() -> Message {
+        Message {
+            is_alive: true,
+            snakes: Vec::new(),
+            pellets: Vec::new(),
+            background_offset: Coordinate::default(),
+        }
+    }
+
     #[test]
     fn wrapped_interpolation_takes_the_short_path() {
         assert!((lerp_wrapped(2.0, 98.0, 0.5, 100.0) - 0.0).abs() < f32::EPSILON);
@@ -671,5 +769,40 @@ mod tests {
     fn wrapped_delta_handles_camera_boundary() {
         assert!((wrapped_delta(2.0, 98.0, 100.0) - 4.0).abs() < f32::EPSILON);
         assert!((wrapped_delta(98.0, 2.0, 100.0) + 4.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn jitter_buffer_selects_adjacent_game_frames() {
+        let snapshots = (0..4)
+            .map(|sequence| Snapshot {
+                message: test_message(),
+                opacity: 1.0,
+                sequence,
+            })
+            .collect();
+
+        let (previous, current, amount) = snapshot_pair(&snapshots, 1.5).unwrap();
+
+        assert_eq!(previous.sequence, 1);
+        assert_eq!(current.sequence, 2);
+        assert!((amount - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn playback_slows_before_underrun_and_catches_up_after_a_burst() {
+        assert_eq!(playback_rate(1.0), 0.8);
+        assert_eq!(playback_rate(JITTER_BUFFER_FRAMES), 1.0);
+        assert_eq!(playback_rate(8.0), 1.1);
+    }
+
+    #[test]
+    fn snake_bodies_are_interpolated_between_snapshots() {
+        let previous = Snake::new(Coordinate { x: 10.0, y: 20.0 }, 5.0);
+        let mut current = previous.clone();
+        current.bodies[0] = Coordinate { x: 20.0, y: 30.0 };
+
+        let body = interpolated_body(Some(&previous), &current, 0, 0.5);
+
+        assert_eq!(body, Coordinate { x: 15.0, y: 25.0 });
     }
 }
