@@ -14,7 +14,7 @@ pub struct View {
     pub is_alive: bool,
     pub snakes: Vec<Snake>,
     pub pellets: Vec<Pellet>,
-    pub background_dots: Vec<Coordinate>,
+    pub background_offset: Coordinate,
 }
 
 impl View {

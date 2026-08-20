@@ -16,13 +16,21 @@ const COLORS: [&str; 7] = [
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Snake {
+    #[serde(rename = "b")]
     pub bodies: VecDeque<Coordinate>, // head, ..., tail
+    #[serde(rename = "a")]
     pub acceleration_time_left: u32,
+    #[serde(skip)]
     pub speed: f32,
+    #[serde(rename = "c")]
     pub color: String,
+    #[serde(rename = "v")]
     pub velocity: Coordinate,
+    #[serde(rename = "s")]
     pub size: usize,
+    #[serde(skip)]
     pub frame_count_offset: u32,
+    #[serde(rename = "h")]
     pub is_visible_head: bool, // for rendering
 }
 

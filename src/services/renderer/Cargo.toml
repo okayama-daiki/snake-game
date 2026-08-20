@@ -25,6 +25,7 @@ features = [
   'Document',
   'FileReader',
   'HtmlCanvasElement',
+  'ImageData',
   'MessageEvent',
   'MouseEvent',
   'Performance',

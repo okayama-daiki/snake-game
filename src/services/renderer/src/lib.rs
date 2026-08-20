@@ -3,22 +3,24 @@ use game::{coordinate::Coordinate, map::Map, pellet::Pellet, snake::Snake, view:
 #[macro_use]
 mod browser;
 use browser::{
-    canvas, create_mouse_position_getter, get_center_coordinate, get_context, get_height,
+    canvas, create_mouse_position_tracker, get_center_coordinate, get_context, get_height,
     get_width, now, window,
 };
 use std::rc::Rc;
 use std::{cell::Cell, collections::VecDeque};
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
-    JsCast,
+    Clamped, JsCast,
 };
 use web_sys::{
     js_sys::{ArrayBuffer, Function, Uint8Array},
-    BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, MessageEvent, WebSocket,
+    BinaryType, CanvasRenderingContext2d, HtmlCanvasElement, ImageData, MessageEvent, MouseEvent,
+    WebSocket,
 };
 
 static MINIMAP_SIZE: f64 = 100.;
 static GLOBAL_MARGIN: f64 = 50.;
+const PERFORMANCE_SAMPLE_COUNT: usize = 30;
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
@@ -37,6 +39,13 @@ pub struct RenderEngine {
     canvas: HtmlCanvasElement,
     socket: WebSocket,
     callback: Function,
+    on_resize: Option<Closure<dyn FnMut()>>,
+    on_message: Option<Closure<dyn FnMut(MessageEvent)>>,
+    on_mouse_move: Option<Closure<dyn FnMut(MouseEvent)>>,
+    on_mouse_down: Option<Closure<dyn FnMut()>>,
+    on_mouse_up: Option<Closure<dyn FnMut()>>,
+    interval_callback: Option<Closure<dyn FnMut()>>,
+    interval_id: Option<i32>,
 }
 
 #[wasm_bindgen]
@@ -47,6 +56,13 @@ impl RenderEngine {
             canvas,
             socket,
             callback,
+            on_resize: None,
+            on_message: None,
+            on_mouse_move: None,
+            on_mouse_down: None,
+            on_mouse_up: None,
+            interval_callback: None,
+            interval_id: None,
         }
     }
 
@@ -78,14 +94,14 @@ impl RenderEngine {
             window()
                 .unwrap()
                 .set_onresize(Some(on_resize.as_ref().unchecked_ref()));
-            on_resize.forget();
+            self.on_resize = Some(on_resize);
         }
 
         // 3. Add a message handler to the websocket so that render is called when a message is received.
         {
             let mut frame_count = 0;
-            let mut process_time: VecDeque<f64> = VecDeque::with_capacity(30);
-            let mut fps_log: VecDeque<f64> = VecDeque::with_capacity(30);
+            let mut process_time: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
+            let mut fps_log: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
             let mut last_frame_time = now().unwrap();
 
             let is_alive = Cell::new(true);
@@ -99,14 +115,22 @@ impl RenderEngine {
             let minimap_context = get_context(&minimap_canvas);
 
             let callback = self.callback.clone();
-            let get_mouse_position = create_mouse_position_getter();
+            let mouse_tracker = create_mouse_position_tracker();
+            window()
+                .unwrap()
+                .set_onmousemove(Some(mouse_tracker.handler.as_ref().unchecked_ref()));
+            let mouse_position = mouse_tracker.position;
+            self.on_mouse_move = Some(mouse_tracker.handler);
             let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
                 // 3.0. Calculate the FPS
                 let start = now().unwrap();
                 let frame_duration = now().unwrap() - last_frame_time;
                 last_frame_time = now().unwrap();
+                if fps_log.len() == PERFORMANCE_SAMPLE_COUNT {
+                    fps_log.pop_front();
+                }
                 fps_log.push_back(frame_duration);
-                if frame_count % 30 == 0 {
+                if frame_count > 0 && frame_count % PERFORMANCE_SAMPLE_COUNT == 0 {
                     log!(
                         "FPS: {}",
                         1000. / (fps_log.iter().sum::<f64>() / fps_log.len() as f64)
@@ -154,17 +178,20 @@ impl RenderEngine {
 
                 // 3.2. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
                 if is_alive.get() {
-                    let dir = vector(&get_center_coordinate(), &get_mouse_position());
+                    let dir = vector(&get_center_coordinate(), &mouse_position.get());
                     socket
                         .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
                         .ok();
                 }
                 frame_count += 1;
+                if process_time.len() == PERFORMANCE_SAMPLE_COUNT {
+                    process_time.pop_front();
+                }
                 process_time.push_back(now().unwrap() - start);
             }) as Box<dyn FnMut(MessageEvent)>);
             self.socket
                 .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-            on_message.forget();
+            self.on_message = Some(on_message);
         }
 
         // 4. Add a mousedown handler to the window so that the snake can accelerate when the window is clicked.
@@ -178,14 +205,13 @@ impl RenderEngine {
                     socket.send_with_str("a").ok();
                 }
             }) as Box<dyn FnMut()>);
-            window()
+            let interval_id = window()
                 .unwrap()
                 .set_interval_with_callback_and_timeout_and_arguments_0(
                     interval_callback.as_ref().unchecked_ref(),
                     100,
                 )
                 .unwrap();
-            interval_callback.forget();
             let on_mousedown = Closure::wrap(Box::new(move || {
                 is_mousedown_for_mousedown.set(true);
             }) as Box<dyn FnMut()>);
@@ -199,8 +225,10 @@ impl RenderEngine {
             window()
                 .unwrap()
                 .set_onmouseup(Some(on_mouseup.as_ref().unchecked_ref()));
-            on_mousedown.forget();
-            on_mouseup.forget();
+            self.interval_callback = Some(interval_callback);
+            self.interval_id = Some(interval_id);
+            self.on_mouse_down = Some(on_mousedown);
+            self.on_mouse_up = Some(on_mouseup);
         }
 
         // 5. Finally, send a start message to the server, and start the game.
@@ -208,6 +236,26 @@ impl RenderEngine {
         self.socket
             .send_with_str(format!("w {} {}", self.canvas.width(), self.canvas.height()).as_str())
             .ok();
+    }
+
+    pub fn destroy(&mut self) {
+        self.socket.set_onmessage(None);
+        if let Ok(window) = window() {
+            window.set_onresize(None);
+            window.set_onmousemove(None);
+            window.set_onmousedown(None);
+            window.set_onmouseup(None);
+            if let Some(interval_id) = self.interval_id.take() {
+                window.clear_interval_with_handle(interval_id);
+            }
+        }
+
+        self.on_resize = None;
+        self.on_message = None;
+        self.on_mouse_move = None;
+        self.on_mouse_down = None;
+        self.on_mouse_up = None;
+        self.interval_callback = None;
     }
 }
 
@@ -222,7 +270,7 @@ fn render(
         (get_width() + 100) as f64,
         (get_height() + 100) as f64,
     );
-    render_background(context, &message.background_dots);
+    render_background(context, &message.background_offset);
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
     render_minimap(context, minimap_context);
@@ -349,16 +397,28 @@ fn update_minimap(minimap_context: &CanvasRenderingContext2d, map: &Map) {
 
     minimap_context.clear_rect(0.0, 0.0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-    // Draw the map
+    // Draw all map cells with a single browser API call. Calling fillRect for
+    // every cell caused a visible frame drop whenever the minimap updated.
+    let size = MINIMAP_SIZE as usize;
+    let mut pixels = vec![0; size * size * 4];
     for x in 0..MINIMAP_SIZE as usize {
         for y in 0..MINIMAP_SIZE as usize {
-            minimap_context.begin_path();
-            minimap_context.set_fill_style_str(
-                format!("rgba(255, 255, 255, {})", map.map[x][y] as f32 / 10.).as_str(),
-            );
-            minimap_context.fill_rect(x as f64, y as f64, 1., 1.);
+            let index = (y * size + x) * 4;
+            pixels[index] = 255;
+            pixels[index + 1] = 255;
+            pixels[index + 2] = 255;
+            pixels[index + 3] = (map.map[x][y].min(10) * 25) as u8;
         }
     }
+    let image_data = ImageData::new_with_u8_clamped_array_and_sh(
+        Clamped(pixels.as_slice()),
+        size as u32,
+        size as u32,
+    )
+    .unwrap();
+    minimap_context
+        .put_image_data(&image_data, 0.0, 0.0)
+        .unwrap();
 
     // Draw the coordinate axis
     minimap_context.set_stroke_style_str("#fff");
@@ -403,20 +463,22 @@ fn render_minimap(context: &CanvasRenderingContext2d, minimap_context: &CanvasRe
         .unwrap();
 }
 
-fn render_background(context: &CanvasRenderingContext2d, background_dots: &Vec<Coordinate>) {
+fn render_background(context: &CanvasRenderingContext2d, offset: &Coordinate) {
     context.set_fill_style_str("#222");
-    for dot in background_dots {
-        context.begin_path();
-        context
-            .arc(
-                dot.x as f64,
-                dot.y as f64,
-                30.,
-                0.0,
-                std::f64::consts::PI * 2.0,
-            )
-            .unwrap();
-        context.fill();
+    let width = (get_width() + 100) as f32;
+    let height = (get_height() + 100) as f32;
+    let mut x = offset.x;
+    while x <= width {
+        let mut y = offset.y;
+        while y <= height {
+            context.begin_path();
+            context
+                .arc(x as f64, y as f64, 30., 0.0, std::f64::consts::PI * 2.0)
+                .unwrap();
+            context.fill();
+            y += 100.0;
+        }
+        x += 100.0;
     }
 }
 
@@ -425,6 +487,9 @@ fn vector(a: &Coordinate, b: &Coordinate) -> Coordinate {
     let x = b.x - a.x;
     let y = b.y - a.y;
     let length = (x * x + y * y).sqrt();
+    if length <= f32::EPSILON || !length.is_finite() {
+        return Coordinate { x: 0.0, y: 0.0 };
+    }
     Coordinate {
         x: x / length,
         y: y / length,
