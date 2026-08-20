@@ -7,7 +7,10 @@ use browser::{
     get_width, now, window,
 };
 use std::rc::Rc;
-use std::{cell::Cell, collections::VecDeque};
+use std::{
+    cell::{Cell, RefCell},
+    collections::VecDeque,
+};
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
     Clamped, JsCast,
@@ -21,6 +24,21 @@ use web_sys::{
 static MINIMAP_SIZE: f64 = 100.;
 static GLOBAL_MARGIN: f64 = 50.;
 const PERFORMANCE_SAMPLE_COUNT: usize = 30;
+const INTERPOLATION_DELAY_MS: f64 = 40.0;
+const TARGET_FRAME_INTERVAL_MS: f64 = 1000.0 / 60.0;
+type AnimationFrameCallback = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
+
+struct TimedMessage {
+    message: Message,
+    received_at: f64,
+    opacity: f64,
+}
+
+#[derive(Default)]
+struct RenderState {
+    previous: Option<TimedMessage>,
+    current: Option<TimedMessage>,
+}
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
@@ -46,6 +64,8 @@ pub struct RenderEngine {
     on_mouse_up: Option<Closure<dyn FnMut()>>,
     interval_callback: Option<Closure<dyn FnMut()>>,
     interval_id: Option<i32>,
+    animation_frame_callback: Option<AnimationFrameCallback>,
+    animation_frame_id: Option<Rc<Cell<Option<i32>>>>,
 }
 
 #[wasm_bindgen]
@@ -63,6 +83,8 @@ impl RenderEngine {
             on_mouse_up: None,
             interval_callback: None,
             interval_id: None,
+            animation_frame_callback: None,
+            animation_frame_id: None,
         }
     }
 
@@ -97,23 +119,19 @@ impl RenderEngine {
             self.on_resize = Some(on_resize);
         }
 
-        // 3. Add a message handler to the websocket so that render is called when a message is received.
-        {
-            let mut frame_count = 0;
-            let mut process_time: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
-            let mut fps_log: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
-            let mut last_frame_time = now().unwrap();
+        let render_state = Rc::new(RefCell::new(RenderState::default()));
+        let context = get_context(&self.canvas);
+        let minimap_canvas = canvas().unwrap();
+        minimap_canvas.set_height(MINIMAP_SIZE as u32);
+        minimap_canvas.set_width(MINIMAP_SIZE as u32);
+        let minimap_context = get_context(&minimap_canvas);
 
+        // 3. Buffer WebSocket snapshots. Painting directly in this callback
+        // made network jitter visible as dropped frames.
+        {
             let is_alive = Cell::new(true);
             let frame_after_death = Cell::new(0);
             let socket = self.socket.clone();
-            let context = get_context(&self.canvas);
-
-            let minimap_canvas = canvas().unwrap();
-            minimap_canvas.set_height(MINIMAP_SIZE as u32);
-            minimap_canvas.set_width(MINIMAP_SIZE as u32);
-            let minimap_context = get_context(&minimap_canvas);
-
             let callback = self.callback.clone();
             let mouse_tracker = create_mouse_position_tracker();
             window()
@@ -121,35 +139,9 @@ impl RenderEngine {
                 .set_onmousemove(Some(mouse_tracker.handler.as_ref().unchecked_ref()));
             let mouse_position = mouse_tracker.position;
             self.on_mouse_move = Some(mouse_tracker.handler);
+            let render_state = render_state.clone();
+            let minimap_context = minimap_context.clone();
             let on_message = Closure::wrap(Box::new(move |e: MessageEvent| {
-                // 3.0. Calculate the FPS
-                let start = now().unwrap();
-                let frame_duration = now().unwrap() - last_frame_time;
-                last_frame_time = now().unwrap();
-                if fps_log.len() == PERFORMANCE_SAMPLE_COUNT {
-                    fps_log.pop_front();
-                }
-                fps_log.push_back(frame_duration);
-                if frame_count > 0 && frame_count % PERFORMANCE_SAMPLE_COUNT == 0 {
-                    log!(
-                        "FPS: {}",
-                        1000. / (fps_log.iter().sum::<f64>() / fps_log.len() as f64)
-                    );
-                    log!(
-                        "FPS variance: {}",
-                        fps_log
-                            .iter()
-                            .map(|x| (1000. / x - 60.).powi(2))
-                            .sum::<f64>()
-                            / fps_log.len() as f64
-                    );
-                    log!(
-                        "Process time: {}",
-                        process_time.iter().sum::<f64>() / process_time.len() as f64
-                    );
-                }
-
-                // 3.1. Parse the message into a Message struct and render the Message.
                 let array_buffer = e.data().dyn_into::<ArrayBuffer>().unwrap();
                 let array = Uint8Array::new(&array_buffer);
                 let vec = array.to_vec();
@@ -166,35 +158,116 @@ impl RenderEngine {
                     if frame_after_death.get() == 150 {
                         callback.call0(&JsValue::NULL).unwrap();
                     }
-                    context.set_global_alpha(
-                        1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.,
-                    );
-                    render(&context, &minimap_context, &message);
+                    let mut state = render_state.borrow_mut();
+                    state.previous = state.current.take();
+                    state.current = Some(TimedMessage {
+                        message,
+                        received_at: now().unwrap(),
+                        opacity: 1. - (frame_after_death.get() as f64 - 50.).max(0.) / 100.,
+                    });
                 }
 
                 if let Ok(map) = Map::from_bytes(&vec) {
                     update_minimap(&minimap_context, &map);
                 }
 
-                // 3.2. Send the mouse position to the server. (To be more precise, send normalized vector from center to mouse position)
+                // Send the normalized mouse direction to the server.
                 if is_alive.get() {
                     let dir = vector(&get_center_coordinate(), &mouse_position.get());
                     socket
                         .send_with_str(format!("v {} {}", dir.x, dir.y).as_str())
                         .ok();
                 }
-                frame_count += 1;
-                if process_time.len() == PERFORMANCE_SAMPLE_COUNT {
-                    process_time.pop_front();
-                }
-                process_time.push_back(now().unwrap() - start);
             }) as Box<dyn FnMut(MessageEvent)>);
             self.socket
                 .set_onmessage(Some(on_message.as_ref().unchecked_ref()));
             self.on_message = Some(on_message);
         }
 
-        // 4. Add a mousedown handler to the window so that the snake can accelerate when the window is clicked.
+        // 4. Paint at the display refresh rate and interpolate the camera one
+        // network frame behind. This keeps 30 Hz server snapshots smooth on
+        // 60/120 Hz displays and absorbs small variations in delivery time.
+        {
+            let animation_frame_callback: AnimationFrameCallback = Rc::new(RefCell::new(None));
+            let animation_frame_id = Rc::new(Cell::new(None));
+            let callback_for_frame = animation_frame_callback.clone();
+            let id_for_frame = animation_frame_id.clone();
+            let render_state = render_state.clone();
+            let context = context.clone();
+            let minimap_context = minimap_context.clone();
+            let mut frame_count = 0;
+            let mut frame_times: VecDeque<f64> = VecDeque::with_capacity(PERFORMANCE_SAMPLE_COUNT);
+            let mut last_callback_time = now().unwrap();
+            let mut last_render_time = last_callback_time;
+            let mut accumulated_time = TARGET_FRAME_INTERVAL_MS;
+
+            *animation_frame_callback.borrow_mut() =
+                Some(Closure::wrap(Box::new(move |timestamp: f64| {
+                    accumulated_time += (timestamp - last_callback_time).clamp(0.0, 100.0);
+                    last_callback_time = timestamp;
+                    if accumulated_time + 0.5 >= TARGET_FRAME_INTERVAL_MS {
+                        accumulated_time %= TARGET_FRAME_INTERVAL_MS;
+                        let frame_duration = timestamp - last_render_time;
+                        last_render_time = timestamp;
+                        if frame_times.len() == PERFORMANCE_SAMPLE_COUNT {
+                            frame_times.pop_front();
+                        }
+                        frame_times.push_back(frame_duration);
+
+                        let state = render_state.borrow();
+                        if let Some(current) = state.current.as_ref() {
+                            context.set_global_alpha(current.opacity);
+                            let (background_offset, camera_shift) = interpolated_camera(
+                                state.previous.as_ref(),
+                                current,
+                                timestamp - INTERPOLATION_DELAY_MS,
+                            );
+                            render(
+                                &context,
+                                &minimap_context,
+                                &current.message,
+                                &background_offset,
+                                &camera_shift,
+                            );
+                        }
+                        drop(state);
+
+                        frame_count += 1;
+                        if frame_count % PERFORMANCE_SAMPLE_COUNT == 0 && !frame_times.is_empty() {
+                            log!(
+                                "Display FPS: {}",
+                                1000.
+                                    / (frame_times.iter().sum::<f64>() / frame_times.len() as f64)
+                            );
+                        }
+                    }
+
+                    if let Some(callback) = callback_for_frame.borrow().as_ref() {
+                        let id = window()
+                            .unwrap()
+                            .request_animation_frame(callback.as_ref().unchecked_ref())
+                            .unwrap();
+                        id_for_frame.set(Some(id));
+                    }
+                }) as Box<dyn FnMut(f64)>));
+
+            let id = window()
+                .unwrap()
+                .request_animation_frame(
+                    animation_frame_callback
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .as_ref()
+                        .unchecked_ref(),
+                )
+                .unwrap();
+            animation_frame_id.set(Some(id));
+            self.animation_frame_callback = Some(animation_frame_callback);
+            self.animation_frame_id = Some(animation_frame_id);
+        }
+
+        // 5. Add a mousedown handler to the window so that the snake can accelerate when the window is clicked.
         {
             let socket = self.socket.clone();
             let is_mousedown = Rc::new(Cell::new(false));
@@ -231,7 +304,7 @@ impl RenderEngine {
             self.on_mouse_up = Some(on_mouseup);
         }
 
-        // 5. Finally, send a start message to the server, and start the game.
+        // 6. Finally, send a start message to the server, and start the game.
         self.socket.send_with_str("s").ok();
         self.socket
             .send_with_str(format!("w {} {}", self.canvas.width(), self.canvas.height()).as_str())
@@ -248,6 +321,11 @@ impl RenderEngine {
             if let Some(interval_id) = self.interval_id.take() {
                 window.clear_interval_with_handle(interval_id);
             }
+            if let Some(animation_frame_id) = self.animation_frame_id.take() {
+                if let Some(id) = animation_frame_id.take() {
+                    window.cancel_animation_frame(id).ok();
+                }
+            }
         }
 
         self.on_resize = None;
@@ -256,6 +334,9 @@ impl RenderEngine {
         self.on_mouse_down = None;
         self.on_mouse_up = None;
         self.interval_callback = None;
+        if let Some(animation_frame_callback) = self.animation_frame_callback.take() {
+            animation_frame_callback.borrow_mut().take();
+        }
     }
 }
 
@@ -263,6 +344,8 @@ fn render(
     context: &CanvasRenderingContext2d,
     minimap_context: &CanvasRenderingContext2d,
     message: &Message,
+    background_offset: &Coordinate,
+    camera_shift: &Coordinate,
 ) {
     context.clear_rect(
         0.0,
@@ -270,18 +353,74 @@ fn render(
         (get_width() + 100) as f64,
         (get_height() + 100) as f64,
     );
-    render_background(context, &message.background_offset);
+    render_background(context, background_offset);
+    context.save();
+    context
+        .translate(camera_shift.x as f64, camera_shift.y as f64)
+        .unwrap();
     render_pellets(context, &message.pellets);
     render_snakes(context, &message.snakes);
+    context.restore();
     render_minimap(context, minimap_context);
 }
 
+fn interpolated_camera(
+    previous: Option<&TimedMessage>,
+    current: &TimedMessage,
+    render_time: f64,
+) -> (Coordinate, Coordinate) {
+    let Some(previous) = previous else {
+        return (current.message.background_offset, Coordinate::default());
+    };
+    let duration = current.received_at - previous.received_at;
+    if duration <= f64::EPSILON || duration > 250.0 {
+        return (current.message.background_offset, Coordinate::default());
+    }
+
+    let amount = ((render_time - previous.received_at) / duration).clamp(0.0, 1.0) as f32;
+    let background_offset = Coordinate {
+        x: lerp_wrapped(
+            previous.message.background_offset.x,
+            current.message.background_offset.x,
+            amount,
+            100.0,
+        ),
+        y: lerp_wrapped(
+            previous.message.background_offset.y,
+            current.message.background_offset.y,
+            amount,
+            100.0,
+        ),
+    };
+    let camera_shift = Coordinate {
+        x: wrapped_delta(
+            background_offset.x,
+            current.message.background_offset.x,
+            100.0,
+        ),
+        y: wrapped_delta(
+            background_offset.y,
+            current.message.background_offset.y,
+            100.0,
+        ),
+    };
+
+    (background_offset, camera_shift)
+}
+
+fn lerp_wrapped(start: f32, end: f32, amount: f32, period: f32) -> f32 {
+    (start + wrapped_delta(end, start, period) * amount).rem_euclid(period)
+}
+
+fn wrapped_delta(value: f32, origin: f32, period: f32) -> f32 {
+    (value - origin + period / 2.0).rem_euclid(period) - period / 2.0
+}
+
 fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
+    context.set_shadow_blur(0.0);
     for pellet in pellets {
         let hsl = pellet_rendering_helper::to_hsl(pellet);
         context.set_fill_style_str(hsl.as_str());
-        context.set_shadow_color(hsl.as_str());
-        context.set_shadow_blur((pellet.size as f64) * 10.);
         context.begin_path();
         context
             .arc(
@@ -297,51 +436,48 @@ fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
 }
 
 fn render_snakes(context: &CanvasRenderingContext2d, snakes: &Vec<Snake>) {
+    context.set_shadow_blur(0.0);
     for snake in snakes {
         // Draw the body
 
         let hsl = snake_rendering_helper::to_hsl(snake);
 
+        context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
+        context.begin_path();
         for body in snake.bodies.iter().rev() {
-            context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
-            context.set_shadow_color("rgba(0, 0, 0, 0.3)");
-            context.set_shadow_blur(10.);
-            context.begin_path();
+            context.move_to(body.x as f64 + snake.size as f64 + 2.0, body.y as f64);
             context
                 .arc(
                     body.x as f64,
                     body.y as f64,
-                    snake.size as f64,
+                    snake.size as f64 + 2.0,
                     0.0,
                     std::f64::consts::PI * 2.0,
                 )
                 .unwrap();
-            context.fill();
-            context.set_fill_style_str(hsl.as_str());
-            context.set_shadow_color(hsl.as_str());
-            context.set_shadow_blur(if snake.acceleration_time_left == 0 {
-                3.
-            } else {
-                (snake.acceleration_time_left as f64 / 7.).sin().abs() * 15.
-            });
-            context.begin_path();
-            context
-                .arc(
-                    body.x as f64,
-                    body.y as f64,
-                    snake.size as f64,
-                    0.0,
-                    std::f64::consts::PI * 2.0,
-                )
-                .unwrap();
-            context.fill();
         }
+        context.fill();
+
+        context.set_fill_style_str(hsl.as_str());
+        context.begin_path();
+        for body in snake.bodies.iter().rev() {
+            context.move_to(body.x as f64 + snake.size as f64, body.y as f64);
+            context
+                .arc(
+                    body.x as f64,
+                    body.y as f64,
+                    snake.size as f64,
+                    0.0,
+                    std::f64::consts::PI * 2.0,
+                )
+                .unwrap();
+        }
+        context.fill();
 
         // Draw the face
         if snake.is_visible_head {
             let head = snake.bodies.front().unwrap();
             let theta = snake.velocity.y.atan2(snake.velocity.x) as f64;
-            context.restore();
             context.set_fill_style_str("#fff");
             context.begin_path();
             context
@@ -468,18 +604,19 @@ fn render_background(context: &CanvasRenderingContext2d, offset: &Coordinate) {
     let width = (get_width() + 100) as f32;
     let height = (get_height() + 100) as f32;
     let mut x = offset.x;
+    context.begin_path();
     while x <= width {
         let mut y = offset.y;
         while y <= height {
-            context.begin_path();
+            context.move_to(x as f64 + 30.0, y as f64);
             context
                 .arc(x as f64, y as f64, 30., 0.0, std::f64::consts::PI * 2.0)
                 .unwrap();
-            context.fill();
             y += 100.0;
         }
         x += 100.0;
     }
+    context.fill();
 }
 
 fn vector(a: &Coordinate, b: &Coordinate) -> Coordinate {
@@ -517,5 +654,22 @@ mod snake_rendering_helper {
 
     pub fn to_hsl(snake: &Snake) -> String {
         format!("hsl({}, 100%, 40%)", snake.color)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapped_interpolation_takes_the_short_path() {
+        assert!((lerp_wrapped(2.0, 98.0, 0.5, 100.0) - 0.0).abs() < f32::EPSILON);
+        assert!((lerp_wrapped(98.0, 2.0, 0.5, 100.0) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn wrapped_delta_handles_camera_boundary() {
+        assert!((wrapped_delta(2.0, 98.0, 100.0) - 4.0).abs() < f32::EPSILON);
+        assert!((wrapped_delta(98.0, 2.0, 100.0) + 4.0).abs() < f32::EPSILON);
     }
 }
