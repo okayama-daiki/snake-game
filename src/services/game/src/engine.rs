@@ -13,12 +13,20 @@ use super::view::View;
 static FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
 const MAP_SIZE: usize = 100;
+const PELLET_CELL_SIZE: f32 = 100.0;
+const PELLET_GRID_SIZE: usize = (FIELD_SIZE / PELLET_CELL_SIZE) as usize;
 
-#[derive(Default)]
 pub struct GameEngine {
     frame_count: u32,
     snakes: HashMap<Uuid, Snake>,
     pellets: HashMap<Uuid, Pellet>,
+    pellet_grid: Vec<Vec<Uuid>>,
+}
+
+impl Default for GameEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GameEngine {
@@ -27,7 +35,71 @@ impl GameEngine {
             frame_count: 0,
             snakes: HashMap::new(),
             pellets: HashMap::new(),
+            pellet_grid: vec![Vec::new(); PELLET_GRID_SIZE * PELLET_GRID_SIZE],
         }
+    }
+
+    fn pellet_cell(position: &Coordinate) -> (usize, usize) {
+        let x = (position.x.rem_euclid(FIELD_SIZE) / PELLET_CELL_SIZE).floor() as usize;
+        let y = (position.y.rem_euclid(FIELD_SIZE) / PELLET_CELL_SIZE).floor() as usize;
+        (x.min(PELLET_GRID_SIZE - 1), y.min(PELLET_GRID_SIZE - 1))
+    }
+
+    fn pellet_cell_index(x: usize, y: usize) -> usize {
+        y * PELLET_GRID_SIZE + x
+    }
+
+    fn insert_pellet_into(
+        pellets: &mut HashMap<Uuid, Pellet>,
+        pellet_grid: &mut [Vec<Uuid>],
+        id: Uuid,
+        mut pellet: Pellet,
+        created_at_frame: u32,
+    ) {
+        pellet.frame_count_offset = created_at_frame;
+        let (x, y) = Self::pellet_cell(&pellet.center);
+        pellet_grid[Self::pellet_cell_index(x, y)].push(id);
+        pellets.insert(id, pellet);
+    }
+
+    fn remove_pellet_from(
+        pellets: &mut HashMap<Uuid, Pellet>,
+        pellet_grid: &mut [Vec<Uuid>],
+        id: &Uuid,
+    ) -> Option<Pellet> {
+        let pellet = pellets.remove(id)?;
+        let (x, y) = Self::pellet_cell(&pellet.center);
+        pellet_grid[Self::pellet_cell_index(x, y)].retain(|candidate| candidate != id);
+        Some(pellet)
+    }
+
+    fn nearby_pellet_ids(pellet_grid: &[Vec<Uuid>], position: &Coordinate) -> Vec<Uuid> {
+        let (center_x, center_y) = Self::pellet_cell(position);
+        let mut ids = Vec::new();
+
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                let x = (center_x as isize + dx).rem_euclid(PELLET_GRID_SIZE as isize) as usize;
+                let y = (center_y as isize + dy).rem_euclid(PELLET_GRID_SIZE as isize) as usize;
+                ids.extend_from_slice(&pellet_grid[Self::pellet_cell_index(x, y)]);
+            }
+        }
+
+        ids
+    }
+
+    fn pellet_ids_in_rectangle(&self, x0: f32, y0: f32, width: f32, height: f32) -> Vec<Uuid> {
+        let x_cells = axis_cells(x0, width);
+        let y_cells = axis_cells(y0, height);
+        let mut ids = Vec::new();
+
+        for x in x_cells {
+            for &y in &y_cells {
+                ids.extend_from_slice(&self.pellet_grid[Self::pellet_cell_index(x, y)]);
+            }
+        }
+
+        ids
     }
 
     pub fn get_random_coordinate(&self) -> Coordinate {
@@ -52,23 +124,40 @@ impl GameEngine {
     }
 
     pub fn remove_snake(&mut self, id: &Uuid) {
-        if let Some(snake) = self.snakes.get(id) {
-            for body in snake.bodies.iter() {
-                if rand::rng().random_range(0..10) < 5 {
-                    let dx = rand::rng().random_range(-10.0..10.0);
-                    let dy = rand::rng().random_range(-10.0..10.0);
-                    let pellet = Pellet::new_with_color_and_size(
-                        Coordinate {
-                            x: body.x + dx,
-                            y: body.y + dy,
-                        },
-                        snake.color.clone(),
-                        3,
-                    );
-                    let id = Uuid::new_v4();
-                    self.pellets.insert(id, pellet);
-                }
-            }
+        let dropped_pellets = self
+            .snakes
+            .get(id)
+            .map(|snake| {
+                snake
+                    .bodies
+                    .iter()
+                    .filter_map(|body| {
+                        if rand::rng().random_range(0..10) < 5 {
+                            let dx = rand::rng().random_range(-10.0..10.0);
+                            let dy = rand::rng().random_range(-10.0..10.0);
+                            Some(Pellet::new_with_color_and_size(
+                                Coordinate {
+                                    x: body.x + dx,
+                                    y: body.y + dy,
+                                },
+                                snake.color.clone(),
+                                3,
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for pellet in dropped_pellets {
+            Self::insert_pellet_into(
+                &mut self.pellets,
+                &mut self.pellet_grid,
+                Uuid::new_v4(),
+                pellet,
+                self.frame_count,
+            );
         }
         self.snakes.remove(id);
     }
@@ -77,7 +166,13 @@ impl GameEngine {
         while self.pellets.len() < MAX_PELLET_COUNT {
             let new_pellet = Pellet::new(self.get_random_coordinate());
             let id = Uuid::new_v4();
-            self.pellets.insert(id, new_pellet);
+            Self::insert_pellet_into(
+                &mut self.pellets,
+                &mut self.pellet_grid,
+                id,
+                new_pellet,
+                self.frame_count,
+            );
         }
     }
 
@@ -106,13 +201,18 @@ impl GameEngine {
             };
 
             if snake.acceleration_time_left > 0 && snake.frame_count_offset % 6 == 0 {
-                self.pellets.insert(
-                    Uuid::new_v4(),
-                    Pellet::new_with_color_and_size(
-                        snake.bodies.pop_back().unwrap(),
-                        snake.color.clone(),
-                        3,
-                    ),
+                let id = Uuid::new_v4();
+                let pellet = Pellet::new_with_color_and_size(
+                    snake.bodies.pop_back().unwrap(),
+                    snake.color.clone(),
+                    3,
+                );
+                Self::insert_pellet_into(
+                    &mut self.pellets,
+                    &mut self.pellet_grid,
+                    id,
+                    pellet,
+                    self.frame_count,
                 );
             }
             snake.bodies.pop_back();
@@ -120,24 +220,28 @@ impl GameEngine {
 
             let mut eaten_pellets: Vec<Uuid> = Vec::new();
 
-            for (id, pellet) in self.pellets.iter_mut() {
+            let nearby_pellets = Self::nearby_pellet_ids(&self.pellet_grid, &new_head);
+            for id in nearby_pellets {
+                let Some(pellet) = self.pellets.get_mut(&id) else {
+                    continue;
+                };
                 // Draw pellets towards the snake
                 if pellet.position.distance2(&new_head) < ((snake.size * 2).pow(2) as f32) {
                     let nx = pellet.position.x + (new_head.x - pellet.position.x) / 5.;
                     let ny = pellet.position.y + (new_head.y - pellet.position.y) / 5.;
                     pellet.position = Coordinate { x: nx, y: ny };
-                    touched_pellets.insert(*id);
+                    touched_pellets.insert(id);
                 }
 
                 // Eat pellets
                 if pellet.position.distance2(&new_head) < (snake.size.pow(2) as f32) {
                     snake.bodies.push_back(snake.get_tail().to_owned());
-                    eaten_pellets.push(*id);
+                    eaten_pellets.push(id);
                 }
             }
 
             for id in eaten_pellets.iter() {
-                self.pellets.remove(id);
+                Self::remove_pellet_from(&mut self.pellets, &mut self.pellet_grid, id);
             }
 
             snake.size = (15 + snake.bodies.len() / 50).min(40);
@@ -206,11 +310,25 @@ impl GameEngine {
         self.fill_pellet();
 
         // Update time to live
-        for (id, pellet) in self.pellets.iter_mut() {
-            if !touched_pellets.contains(id) {
-                pellet.update();
+        // The orbit is a visual effect. Updating trigonometry for all 5,000
+        // pellets every server frame caused the low-CPU production server to
+        // miss most of its 30 Hz deadlines. Only attracted pellets mutate on
+        // the server; visible orbiting is calculated per client below.
+        let mut moved_pellets = Vec::with_capacity(touched_pellets.len());
+        for id in touched_pellets {
+            if let Some(pellet) = self.pellets.get_mut(&id) {
+                let previous_cell = Self::pellet_cell(&pellet.center);
+                let next_cell = Self::pellet_cell(&pellet.position);
+                pellet.center = pellet.position;
+                if previous_cell != next_cell {
+                    moved_pellets.push((id, previous_cell, next_cell));
+                }
             }
-            pellet.frame_count_offset += 1;
+        }
+        for (id, (previous_x, previous_y), (next_x, next_y)) in moved_pellets {
+            self.pellet_grid[Self::pellet_cell_index(previous_x, previous_y)]
+                .retain(|candidate| candidate != &id);
+            self.pellet_grid[Self::pellet_cell_index(next_x, next_y)].push(id);
         }
         for (_, snake) in self.snakes.iter_mut() {
             snake.frame_count_offset += 1;
@@ -253,7 +371,7 @@ impl GameEngine {
                 arr[x.clamp(0, MAP_SIZE - 1)][y.clamp(0, MAP_SIZE - 1)] += 1;
             }
         }
-        for (_, pellet) in self.pellets.iter() {
+        for pellet in self.pellets.values() {
             let x = (pellet.position.x / cell_size).floor() as usize;
             let y = (pellet.position.y / cell_size).floor() as usize;
             arr[x.clamp(0, MAP_SIZE - 1)][y.clamp(0, MAP_SIZE - 1)] += 1;
@@ -306,9 +424,15 @@ impl GameEngine {
         }
 
         // 2. Get pellets in the rectangle
-        for (_, pellet) in self.pellets.iter() {
+        for id in self.pellet_ids_in_rectangle(x0, y0, width, height) {
+            let Some(pellet) = self.pellets.get(&id) else {
+                continue;
+            };
             if pellet.position.is_in_rectangle(x0, y0, width, height) {
-                let pellet = pellet.clone();
+                let mut pellet = pellet.clone();
+                pellet.frame_count_offset =
+                    self.frame_count.wrapping_sub(pellet.frame_count_offset);
+                pellet.update();
                 pellets.push(Pellet {
                     position: Coordinate {
                         x: (pellet.position.x - x0).rem_euclid(FIELD_SIZE),
@@ -329,6 +453,19 @@ impl GameEngine {
             },
         }
     }
+}
+
+fn axis_cells(start: f32, length: f32) -> Vec<usize> {
+    if length >= FIELD_SIZE {
+        return (0..PELLET_GRID_SIZE).collect();
+    }
+
+    let first_visible_cell = (start.rem_euclid(FIELD_SIZE) / PELLET_CELL_SIZE).floor() as usize;
+    let start_cell = (first_visible_cell + PELLET_GRID_SIZE - 1) % PELLET_GRID_SIZE;
+    let cell_count = (length.max(0.0) / PELLET_CELL_SIZE).ceil() as usize + 3;
+    (0..cell_count.min(PELLET_GRID_SIZE))
+        .map(|offset| (start_cell + offset) % PELLET_GRID_SIZE)
+        .collect()
 }
 
 #[cfg(test)]
@@ -368,5 +505,37 @@ mod tests {
         engine.forward();
 
         assert_eq!(engine.snakes.len(), 1);
+    }
+
+    #[test]
+    fn default_engine_initializes_the_pellet_grid() {
+        let engine = GameEngine::default();
+
+        assert_eq!(
+            engine.pellet_grid.len(),
+            PELLET_GRID_SIZE * PELLET_GRID_SIZE
+        );
+    }
+
+    #[test]
+    fn spatial_grid_finds_pellets_across_the_field_boundary() {
+        let mut engine = GameEngine::new();
+        let pellet_id = Uuid::new_v4();
+        let pellet = Pellet::new(Coordinate {
+            x: FIELD_SIZE - 10.0,
+            y: 50.0,
+        });
+        GameEngine::insert_pellet_into(
+            &mut engine.pellets,
+            &mut engine.pellet_grid,
+            pellet_id,
+            pellet,
+            engine.frame_count,
+        );
+
+        let nearby =
+            GameEngine::nearby_pellet_ids(&engine.pellet_grid, &Coordinate { x: 5.0, y: 50.0 });
+
+        assert!(nearby.contains(&pellet_id));
     }
 }
