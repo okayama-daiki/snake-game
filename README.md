@@ -51,7 +51,7 @@ You can have fun from [this link](https://okayama-daiki.github.io/snake-game/).
 
 ## Prerequisite
 
-Install wasm-pack for Rust builds to webassebmly.
+Install [Bun](https://bun.sh) and wasm-pack for Rust builds to WebAssembly.
 
 ```bash
 cargo install wasm-pack
@@ -67,13 +67,13 @@ git clone https://github.com/okayama-daiki/snake-game
 
 ```bash
 cd snake-game
-npm install && npm run build
+bun install && bun run build
 ```
 
 ## Run
 
 ```bash
-npm run start
+bun run start
 ```
 
 ## Tech Stack

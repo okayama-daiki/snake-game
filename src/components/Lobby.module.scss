@@ -41,8 +41,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  width: 100%;
   height: 100dvh;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
   animation: fadeIn 1s ease-in-out forwards;
+}
+
+.container:disabled {
+  cursor: default;
 }
 
 .title {

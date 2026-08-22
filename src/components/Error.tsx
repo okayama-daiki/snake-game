@@ -1,5 +1,5 @@
-import styles from "./Error.module.scss";
 import src from "../assets/error.webp";
+import styles from "./Error.module.scss";
 
 interface ErrorProps {
   transparent?: boolean;
@@ -27,6 +27,7 @@ export default function ErrorModal({ transparent }: ErrorProps) {
           Please refresh the page or try again later.
         </p>
         <button
+          type="button"
           className={styles.button}
           onClick={() => window.location.reload()}
         >

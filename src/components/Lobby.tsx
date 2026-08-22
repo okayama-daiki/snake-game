@@ -9,13 +9,11 @@ export default function Lobby({
   toGame: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       className={styles.container}
-      onClick={() => {
-        if (connectionStatus === ConnectionStatus.OPEN) {
-          toGame();
-        }
-      }}
+      disabled={connectionStatus !== ConnectionStatus.OPEN}
+      onClick={toGame}
     >
       <h1 className={styles.title}>Snake Game</h1>
       <p className={styles.message}>
@@ -29,18 +27,18 @@ export default function Lobby({
           <span className={styles.blink}>Tap to Start</span>
         )}
       </p>
-    </div>
+    </button>
   );
 }
+
+const loaderCells = ["head", "body-1", "body-2", "tail"];
 
 const SnakeLoader = () => {
   return (
     <span className={styles.loader}>
-      {Array(4)
-        .fill(null)
-        .map((_, i) => {
-          return <span key={i} className={styles.cell}></span>;
-        })}
+      {loaderCells.map((cell) => {
+        return <span key={cell} className={styles.cell}></span>;
+      })}
     </span>
   );
 };

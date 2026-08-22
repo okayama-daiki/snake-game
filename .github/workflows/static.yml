@@ -23,25 +23,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v7
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
         with:
-          tool: "wasm-pack@0.12"
+          tool: "wasm-pack@0.15.0"
       - name: Install dependencies
-        run: npm install
+        run: bun ci
+      - name: Lint
+        run: bun run lint
       - name: Build
-        run: npm run build
+        run: bun run build
         env:
           VITE_WSS_URI: ${{ secrets.VITE_WSS_URI }}
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: "./dist"
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

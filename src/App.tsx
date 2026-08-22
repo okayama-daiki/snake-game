@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import Lobby from "./components/Lobby";
-import Game from "./components/Game";
-import Error from "./components/Error";
-import { ConnectionStatus, PlayerStatus } from "./types";
 import init from "renderer";
+import ErrorModal from "./components/Error";
+import Game from "./components/Game";
+import Lobby from "./components/Lobby";
+import { ConnectionStatus, PlayerStatus } from "./types";
 
 const socket = new WebSocket(
-  import.meta.env.VITE_WSS_URI || "ws://localhost:5173"
+  import.meta.env.VITE_WSS_URI || "ws://localhost:5173",
 );
 
 init();
@@ -14,11 +14,11 @@ init();
 export default function App() {
   const [playerStatus, setPlayerStatus] = useState(PlayerStatus.NOT_PLAYING);
   const [connectionStatus, setConnectionStatus] = useState(
-    ConnectionStatus.CONNECTING
+    ConnectionStatus.CONNECTING,
   );
   const toLobby = useCallback(
     () => setPlayerStatus(PlayerStatus.NOT_PLAYING),
-    []
+    [],
   );
   const toGame = useCallback(() => setPlayerStatus(PlayerStatus.PLAYING), []);
 
@@ -49,20 +49,14 @@ export default function App() {
 
   return (
     <main>
-      {connectionStatus == ConnectionStatus.CLOSED && (
-        <Error transparent={playerStatus == PlayerStatus.PLAYING} />
+      {connectionStatus === ConnectionStatus.CLOSED && (
+        <ErrorModal transparent={playerStatus === PlayerStatus.PLAYING} />
       )}
-      {playerStatus == PlayerStatus.PLAYING && (
-        <Game
-          socket={socket}
-          toLobby={toLobby}
-        />
+      {playerStatus === PlayerStatus.PLAYING && (
+        <Game socket={socket} toLobby={toLobby} />
       )}
-      {playerStatus == PlayerStatus.NOT_PLAYING && (
-        <Lobby
-          connectionStatus={connectionStatus}
-          toGame={toGame}
-        />
+      {playerStatus === PlayerStatus.NOT_PLAYING && (
+        <Lobby connectionStatus={connectionStatus} toGame={toGame} />
       )}
     </main>
   );
