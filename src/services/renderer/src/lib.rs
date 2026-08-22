@@ -9,7 +9,7 @@ use browser::{
 use std::rc::Rc;
 use std::{
     cell::{Cell, RefCell},
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
 };
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
@@ -28,8 +28,6 @@ const TARGET_FRAME_INTERVAL_MS: f64 = 1000.0 / 60.0;
 const SERVER_FRAME_INTERVAL_MS: f64 = 1000.0 / 30.0;
 const JITTER_BUFFER_FRAMES: f64 = 4.0;
 const MAX_BUFFERED_SNAPSHOTS: usize = 16;
-const SELF_OVERLAP_PADDING_POINTS: usize = 4;
-const SELF_OVERLAP_BORDER_WIDTH: f64 = 2.0;
 type AnimationFrameCallback = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 
 struct Snapshot {
@@ -515,26 +513,11 @@ fn render_snakes(
                 && (head.y - self_head_position.y).abs() < 1.0
         });
 
-        context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
-        context.begin_path();
         for body in bodies.iter().rev() {
-            context.move_to(body.x as f64 + snake_size + 2.0, body.y as f64);
-            context
-                .arc(
-                    body.x as f64,
-                    body.y as f64,
-                    snake_size + 2.0,
-                    0.0,
-                    std::f64::consts::PI * 2.0,
-                )
-                .unwrap();
-        }
-        context.fill();
-
-        context.set_fill_style_str(hsl.as_str());
-        context.begin_path();
-        for body in bodies.iter().rev() {
-            context.move_to(body.x as f64 + snake_size, body.y as f64);
+            context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
+            context.set_shadow_color("rgba(0, 0, 0, 0.3)");
+            context.set_shadow_blur(10.0);
+            context.begin_path();
             context
                 .arc(
                     body.x as f64,
@@ -544,14 +527,24 @@ fn render_snakes(
                     std::f64::consts::PI * 2.0,
                 )
                 .unwrap();
-        }
-        context.fill();
+            context.fill();
 
-        // Only redraw the short foreground sections at actual self-crossings.
-        // Shadowing every body point makes straight sections look ribbed.
-        if is_self {
-            render_self_overlap_shadows(context, &bodies, snake_size, &hsl);
+            context.set_fill_style_str(hsl.as_str());
+            context.set_shadow_color(hsl.as_str());
+            context.set_shadow_blur(snake_glow_blur(snake));
+            context.begin_path();
+            context
+                .arc(
+                    body.x as f64,
+                    body.y as f64,
+                    snake_size,
+                    0.0,
+                    std::f64::consts::PI * 2.0,
+                )
+                .unwrap();
+            context.fill();
         }
+        context.set_shadow_blur(0.0);
 
         // Draw the face
         if let Some(head) = head {
@@ -629,150 +622,11 @@ fn interpolated_snake_size(previous: Option<&Snake>, current: &Snake, amount: f3
     previous_size + (current_size - previous_size) * amount as f64
 }
 
-fn render_self_overlap_shadows(
-    context: &CanvasRenderingContext2d,
-    bodies: &[Coordinate],
-    snake_size: f64,
-    color: &str,
-) {
-    let overlap = self_overlap_geometry(bodies, snake_size as f32);
-    if overlap.foreground_ranges.is_empty() {
-        return;
-    }
-
-    context.save();
-    context.begin_path();
-    for &body_index in &overlap.background_indices {
-        let body = bodies[body_index];
-        context.move_to(body.x as f64 + snake_size, body.y as f64);
-        context
-            .arc(
-                body.x as f64,
-                body.y as f64,
-                snake_size,
-                0.0,
-                std::f64::consts::PI * 2.0,
-            )
-            .unwrap();
-    }
-    context.clip();
-
-    context.set_line_cap("round");
-    context.set_line_join("round");
-    context.set_stroke_style_str("rgba(0, 0, 0, 0.45)");
-    context.set_line_width(snake_size * 2.0 + SELF_OVERLAP_BORDER_WIDTH * 2.0);
-    stroke_body_ranges(context, bodies, &overlap.foreground_ranges);
-
-    context.set_stroke_style_str(color);
-    context.set_line_width(snake_size * 2.0);
-    stroke_body_ranges(context, bodies, &overlap.foreground_ranges);
-    context.restore();
-}
-
-fn stroke_body_ranges(
-    context: &CanvasRenderingContext2d,
-    bodies: &[Coordinate],
-    ranges: &[(usize, usize)],
-) {
-    for &(start, end) in ranges.iter().rev() {
-        let tail_side = bodies[end];
-        context.begin_path();
-        context.move_to(tail_side.x as f64, tail_side.y as f64);
-        for body in bodies[start..=end].iter().rev().skip(1) {
-            context.line_to(body.x as f64, body.y as f64);
-        }
-        context.stroke();
-    }
-}
-
-#[derive(Debug, PartialEq)]
-struct SelfOverlapGeometry {
-    foreground_ranges: Vec<(usize, usize)>,
-    background_indices: Vec<usize>,
-}
-
-fn self_overlap_geometry(bodies: &[Coordinate], snake_size: f32) -> SelfOverlapGeometry {
-    if bodies.len() < 3 || snake_size <= 0.0 {
-        return SelfOverlapGeometry {
-            foreground_ranges: Vec::new(),
-            background_indices: Vec::new(),
-        };
-    }
-
-    let overlap_distance = snake_size * 2.0 + 2.0;
-    let overlap_distance_squared = overlap_distance * overlap_distance;
-    let minimum_path_distance = snake_size * 3.0;
-    let mut path_distances = Vec::with_capacity(bodies.len());
-    path_distances.push(0.0);
-    for pair in bodies.windows(2) {
-        let dx = pair[1].x - pair[0].x;
-        let dy = pair[1].y - pair[0].y;
-        let segment_length = (dx * dx + dy * dy).sqrt();
-        path_distances.push(path_distances.last().copied().unwrap() + segment_length);
-    }
-
-    let cell_size = overlap_distance;
-    let mut grid: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
-    for (index, body) in bodies.iter().enumerate() {
-        let cell = (
-            (body.x / cell_size).floor() as i32,
-            (body.y / cell_size).floor() as i32,
-        );
-        grid.entry(cell).or_default().push(index);
-    }
-
-    let mut foreground_indices = vec![false; bodies.len()];
-    let mut background_indices = vec![false; bodies.len()];
-    for (front_index, front) in bodies.iter().enumerate() {
-        let cell_x = (front.x / cell_size).floor() as i32;
-        let cell_y = (front.y / cell_size).floor() as i32;
-        for dx in -1..=1 {
-            for dy in -1..=1 {
-                let Some(candidates) = grid.get(&(cell_x + dx, cell_y + dy)) else {
-                    continue;
-                };
-                for &behind_index in candidates {
-                    if behind_index <= front_index
-                        || path_distances[behind_index] - path_distances[front_index]
-                            < minimum_path_distance
-                    {
-                        continue;
-                    }
-                    let x = bodies[behind_index].x - front.x;
-                    let y = bodies[behind_index].y - front.y;
-                    if x * x + y * y <= overlap_distance_squared {
-                        foreground_indices[front_index] = true;
-                        background_indices[behind_index] = true;
-                    }
-                }
-            }
-        }
-    }
-
-    let mut foreground_ranges: Vec<(usize, usize)> = Vec::new();
-    for (front_index, overlaps) in foreground_indices.into_iter().enumerate() {
-        if !overlaps {
-            continue;
-        }
-        let start = front_index.saturating_sub(SELF_OVERLAP_PADDING_POINTS);
-        let end = (front_index + SELF_OVERLAP_PADDING_POINTS).min(bodies.len() - 1);
-        if let Some(last) = foreground_ranges
-            .last_mut()
-            .filter(|last| start <= last.1 + 1)
-        {
-            last.1 = last.1.max(end);
-        } else {
-            foreground_ranges.push((start, end));
-        }
-    }
-
-    SelfOverlapGeometry {
-        foreground_ranges,
-        background_indices: background_indices
-            .into_iter()
-            .enumerate()
-            .filter_map(|(index, overlaps)| overlaps.then_some(index))
-            .collect(),
+fn snake_glow_blur(snake: &Snake) -> f64 {
+    if snake.acceleration_time_left == 0 {
+        3.0
+    } else {
+        (snake.acceleration_time_left as f64 / 7.0).sin().abs() * 15.0
     }
 }
 
@@ -1051,40 +905,20 @@ mod tests {
     }
 
     #[test]
-    fn straight_snake_has_no_self_overlap_shadow() {
-        let bodies: Vec<_> = (0..20)
-            .map(|index| Coordinate {
-                x: index as f32 * 5.0,
-                y: 0.0,
-            })
-            .collect();
+    fn snake_has_a_soft_glow_at_normal_speed() {
+        let snake = Snake::new(Coordinate::default(), 5.0);
 
-        let overlap = self_overlap_geometry(&bodies, 15.0);
-
-        assert!(overlap.foreground_ranges.is_empty());
-        assert!(overlap.background_indices.is_empty());
+        assert!((snake_glow_blur(&snake) - 3.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn coiled_snake_marks_only_the_foreground_section() {
-        let bodies = [
-            Coordinate { x: 0.0, y: 0.0 },
-            Coordinate { x: 10.0, y: 0.0 },
-            Coordinate { x: 20.0, y: 0.0 },
-            Coordinate { x: 30.0, y: 0.0 },
-            Coordinate { x: 30.0, y: 10.0 },
-            Coordinate { x: 30.0, y: 20.0 },
-            Coordinate { x: 20.0, y: 20.0 },
-            Coordinate { x: 10.0, y: 20.0 },
-            Coordinate { x: 0.0, y: 20.0 },
-            Coordinate { x: 0.0, y: 10.0 },
-            Coordinate { x: 0.0, y: 1.0 },
-        ];
+    fn snake_glow_pulses_while_accelerating() {
+        let mut snake = Snake::new(Coordinate::default(), 5.0);
+        snake.acceleration_time_left = 11;
 
-        let overlap = self_overlap_geometry(&bodies, 5.0);
+        let expected = (11.0_f64 / 7.0).sin().abs() * 15.0;
 
-        assert_eq!(overlap.foreground_ranges, vec![(0, 5)]);
-        assert_eq!(overlap.background_indices, vec![9, 10]);
+        assert!((snake_glow_blur(&snake) - expected).abs() < f64::EPSILON);
     }
 
     #[test]
