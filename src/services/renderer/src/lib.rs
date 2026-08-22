@@ -9,7 +9,7 @@ use browser::{
 use std::rc::Rc;
 use std::{
     cell::{Cell, RefCell},
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
 };
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure, JsValue},
@@ -28,6 +28,9 @@ const TARGET_FRAME_INTERVAL_MS: f64 = 1000.0 / 60.0;
 const SERVER_FRAME_INTERVAL_MS: f64 = 1000.0 / 30.0;
 const JITTER_BUFFER_FRAMES: f64 = 4.0;
 const MAX_BUFFERED_SNAPSHOTS: usize = 16;
+const BODY_SPRITE_CACHE_CAPACITY: usize = 256;
+const RADIUS_STEPS_PER_PIXEL: f64 = 4.0;
+const BLUR_STEPS_PER_PIXEL: f64 = 2.0;
 type AnimationFrameCallback = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 
 struct Snapshot {
@@ -40,6 +43,64 @@ struct Snapshot {
 struct RenderState {
     snapshots: VecDeque<Snapshot>,
     next_sequence: u64,
+}
+
+#[derive(Clone)]
+struct BodySprite {
+    canvas: HtmlCanvasElement,
+    center: f64,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct BodySpriteKey {
+    color: String,
+    radius_steps: u16,
+    blur_steps: u16,
+}
+
+impl BodySpriteKey {
+    fn new(color: &str, radius: f64, blur: f64) -> Self {
+        Self {
+            color: color.to_owned(),
+            radius_steps: quantized_steps(radius, RADIUS_STEPS_PER_PIXEL),
+            blur_steps: quantized_steps(blur, BLUR_STEPS_PER_PIXEL),
+        }
+    }
+
+    fn radius(&self) -> f64 {
+        self.radius_steps as f64 / RADIUS_STEPS_PER_PIXEL
+    }
+
+    fn blur(&self) -> f64 {
+        self.blur_steps as f64 / BLUR_STEPS_PER_PIXEL
+    }
+}
+
+#[derive(Default)]
+struct BodySpriteCache {
+    entries: HashMap<BodySpriteKey, BodySprite>,
+    insertion_order: VecDeque<BodySpriteKey>,
+}
+
+impl BodySpriteCache {
+    fn get(&self, key: &BodySpriteKey) -> Option<BodySprite> {
+        self.entries.get(key).cloned()
+    }
+
+    fn insert(&mut self, key: BodySpriteKey, sprite: BodySprite) {
+        while self.entries.len() >= BODY_SPRITE_CACHE_CAPACITY {
+            let Some(oldest) = self.insertion_order.pop_front() else {
+                break;
+            };
+            self.entries.remove(&oldest);
+        }
+        self.insertion_order.push_back(key.clone());
+        self.entries.insert(key, sprite);
+    }
+}
+
+thread_local! {
+    static BODY_SPRITE_CACHE: RefCell<BodySpriteCache> = RefCell::new(BodySpriteCache::default());
 }
 
 // ref: https://rustwasm.github.io/docs/book/game-of-life/debugging.html
@@ -522,38 +583,12 @@ fn render_snakes(
                 && (head.y - self_head_position.y).abs() < 1.0
         });
 
+        let shadow_sprite = cached_body_sprite("rgba(0, 0, 0, 0.3)", snake_size, 10.0);
+        let glow_sprite = cached_body_sprite(&hsl, snake_size, snake_glow_blur(snake));
         for body in bodies.iter().rev() {
-            context.set_fill_style_str("rgba(0, 0, 0, 0.3)");
-            context.set_shadow_color("rgba(0, 0, 0, 0.3)");
-            context.set_shadow_blur(10.0);
-            context.begin_path();
-            context
-                .arc(
-                    body.x as f64,
-                    body.y as f64,
-                    snake_size,
-                    0.0,
-                    std::f64::consts::PI * 2.0,
-                )
-                .unwrap();
-            context.fill();
-
-            context.set_fill_style_str(hsl.as_str());
-            context.set_shadow_color(hsl.as_str());
-            context.set_shadow_blur(snake_glow_blur(snake));
-            context.begin_path();
-            context
-                .arc(
-                    body.x as f64,
-                    body.y as f64,
-                    snake_size,
-                    0.0,
-                    std::f64::consts::PI * 2.0,
-                )
-                .unwrap();
-            context.fill();
+            draw_body_sprite(context, &shadow_sprite, body);
+            draw_body_sprite(context, &glow_sprite, body);
         }
-        context.set_shadow_blur(0.0);
 
         // Draw the face
         if let Some(head) = head {
@@ -637,6 +672,58 @@ fn snake_glow_blur(snake: &Snake) -> f64 {
     } else {
         (snake.acceleration_time_left as f64 / 7.0).sin().abs() * 15.0
     }
+}
+
+fn quantized_steps(value: f64, steps_per_pixel: f64) -> u16 {
+    (value.max(0.0) * steps_per_pixel)
+        .round()
+        .min(u16::MAX as f64) as u16
+}
+
+fn cached_body_sprite(color: &str, radius: f64, blur: f64) -> BodySprite {
+    let key = BodySpriteKey::new(color, radius, blur);
+    if let Some(sprite) = BODY_SPRITE_CACHE.with(|cache| cache.borrow().get(&key)) {
+        return sprite;
+    }
+
+    let sprite = create_body_sprite(&key);
+    BODY_SPRITE_CACHE.with(|cache| cache.borrow_mut().insert(key, sprite.clone()));
+    sprite
+}
+
+fn create_body_sprite(key: &BodySpriteKey) -> BodySprite {
+    let radius = key.radius();
+    let blur = key.blur();
+    let extent = radius + blur * 2.0 + 2.0;
+    let dimension = (extent * 2.0).ceil().max(1.0) as u32;
+    let center = dimension as f64 / 2.0;
+    let sprite_canvas = canvas().unwrap();
+    sprite_canvas.set_width(dimension);
+    sprite_canvas.set_height(dimension);
+    let sprite_context = get_context(&sprite_canvas);
+    sprite_context.set_fill_style_str(&key.color);
+    sprite_context.set_shadow_color(&key.color);
+    sprite_context.set_shadow_blur(blur);
+    sprite_context.begin_path();
+    sprite_context
+        .arc(center, center, radius, 0.0, std::f64::consts::PI * 2.0)
+        .unwrap();
+    sprite_context.fill();
+
+    BodySprite {
+        canvas: sprite_canvas,
+        center,
+    }
+}
+
+fn draw_body_sprite(context: &CanvasRenderingContext2d, sprite: &BodySprite, body: &Coordinate) {
+    context
+        .draw_image_with_html_canvas_element(
+            &sprite.canvas,
+            body.x as f64 - sprite.center,
+            body.y as f64 - sprite.center,
+        )
+        .unwrap();
 }
 
 fn interpolated_body(
@@ -928,6 +1015,18 @@ mod tests {
         let expected = (11.0_f64 / 7.0).sin().abs() * 15.0;
 
         assert!((snake_glow_blur(&snake) - expected).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn body_sprite_keys_quantize_subpixel_changes() {
+        let first = BodySpriteKey::new("blue", 15.11, 3.1);
+        let second = BodySpriteKey::new("blue", 15.12, 3.2);
+        let different_blur = BodySpriteKey::new("blue", 15.12, 3.3);
+
+        assert_eq!(first, second);
+        assert_ne!(first, different_blur);
+        assert!((first.radius() - 15.0).abs() < f64::EPSILON);
+        assert!((first.blur() - 3.0).abs() < f64::EPSILON);
     }
 
     #[test]
