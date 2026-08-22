@@ -1,11 +1,19 @@
 mod messages;
+mod ranking;
 mod websocket_actor;
 mod websocket_session;
 use actix::{Actor, Addr};
-use actix_web::{get, web::Data, web::Payload, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{
+    get,
+    web::{Data, Payload, Query},
+    App, Error, HttpRequest, HttpResponse, HttpServer,
+};
 use actix_web_actors::ws;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+use ranking::{RankingStore, SharedRanking};
+use serde::Deserialize;
 use std::env;
+use std::sync::{Arc, RwLock};
 use websocket_actor::WebsocketActor;
 use websocket_session::WebsocketSession;
 
@@ -25,6 +33,32 @@ pub async fn health() -> HttpResponse {
     HttpResponse::Ok().finish()
 }
 
+#[get("/leaderboard")]
+pub async fn leaderboard(
+    ranking: Data<SharedRanking>,
+    query: Query<LeaderboardQuery>,
+) -> HttpResponse {
+    let entries = ranking
+        .read()
+        .map(|ranking| {
+            let player_token = query
+                .player
+                .as_deref()
+                .and_then(|value| uuid::Uuid::parse_str(value).ok());
+            ranking.leaderboard(player_token)
+        })
+        .unwrap_or_default();
+
+    HttpResponse::Ok()
+        .insert_header(("Access-Control-Allow-Origin", "*"))
+        .json(entries)
+}
+
+#[derive(Deserialize)]
+pub struct LeaderboardQuery {
+    player: Option<String>,
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
@@ -38,7 +72,8 @@ async fn main() -> std::io::Result<()> {
         Err(_e) => "5173".to_string(),
     };
 
-    let websocket_server = WebsocketActor::default().start();
+    let ranking = Arc::new(RwLock::new(RankingStore::default()));
+    let websocket_server = WebsocketActor::new(ranking.clone()).start();
 
     println!("Starting server on {}:{}", host, port);
     if std::env::var("PRIVATE_KEY_FILE").is_err()
@@ -48,6 +83,8 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .service(handle_connection)
                 .service(health)
+                .service(leaderboard)
+                .app_data(Data::new(ranking.clone()))
                 .app_data(Data::new(websocket_server.clone()))
         })
         .bind(format!("{}:{}", host, port))?
@@ -69,6 +106,8 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .service(handle_connection)
                 .service(health)
+                .service(leaderboard)
+                .app_data(Data::new(ranking.clone()))
                 .app_data(Data::new(websocket_server.clone()))
         })
         .bind_openssl(format!("{}:{}", host, port), builder)?

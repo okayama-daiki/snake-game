@@ -59,6 +59,7 @@ pub struct RenderEngine {
     canvas: HtmlCanvasElement,
     socket: WebSocket,
     callback: Function,
+    player_token: String,
     on_resize: Option<Closure<dyn FnMut()>>,
     on_message: Option<Closure<dyn FnMut(MessageEvent)>>,
     on_mouse_move: Option<Closure<dyn FnMut(MouseEvent)>>,
@@ -73,11 +74,17 @@ pub struct RenderEngine {
 #[wasm_bindgen]
 impl RenderEngine {
     #[wasm_bindgen(constructor)]
-    pub fn new(canvas: HtmlCanvasElement, socket: WebSocket, callback: Function) -> Self {
+    pub fn new(
+        canvas: HtmlCanvasElement,
+        socket: WebSocket,
+        callback: Function,
+        player_token: String,
+    ) -> Self {
         Self {
             canvas,
             socket,
             callback,
+            player_token,
             on_resize: None,
             on_message: None,
             on_mouse_move: None,
@@ -331,7 +338,9 @@ impl RenderEngine {
         }
 
         // 6. Finally, send a start message to the server, and start the game.
-        self.socket.send_with_str("s").ok();
+        self.socket
+            .send_with_str(format!("s {}", self.player_token).as_str())
+            .ok();
         self.socket
             .send_with_str(format!("w {} {}", self.canvas.width(), self.canvas.height()).as_str())
             .ok();

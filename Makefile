@@ -4,4 +4,4 @@ server:
 	cargo build --manifest-path src/services/server/Cargo.toml --release
 
 client:
-	npm install && npm run build
+	bun install && bun run build

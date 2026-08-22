@@ -1,0 +1,50 @@
+.root {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  width: min(200px, calc(100vw - 36px));
+  color: #eee;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #111;
+}
+
+.list {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.outside {
+  margin-top: 6px;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank,
+.score {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .root {
+    top: 12px;
+    right: 12px;
+    width: 170px;
+  }
+
+  .entry {
+    font-size: 0.8rem;
+  }
+}

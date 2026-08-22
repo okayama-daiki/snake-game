@@ -8,12 +8,23 @@ export default function Lobby({
   connectionStatus: ConnectionStatus;
   toGame: () => void;
 }) {
+  const canStart = connectionStatus === ConnectionStatus.OPEN;
+  const startGame = () => {
+    if (canStart) toGame();
+  };
+
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Preserve the original full-screen lobby styling while retaining keyboard support.
     <div
       className={styles.container}
-      onClick={() => {
-        if (connectionStatus === ConnectionStatus.OPEN) {
-          toGame();
+      role="button"
+      tabIndex={canStart ? 0 : -1}
+      aria-disabled={!canStart}
+      onClick={startGame}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          startGame();
         }
       }}
     >
@@ -33,14 +44,14 @@ export default function Lobby({
   );
 }
 
+const loaderCells = ["head", "body-1", "body-2", "tail"];
+
 const SnakeLoader = () => {
   return (
     <span className={styles.loader}>
-      {Array(4)
-        .fill(null)
-        .map((_, i) => {
-          return <span key={i} className={styles.cell}></span>;
-        })}
+      {loaderCells.map((cell) => {
+        return <span key={cell} className={styles.cell}></span>;
+      })}
     </span>
   );
 };
