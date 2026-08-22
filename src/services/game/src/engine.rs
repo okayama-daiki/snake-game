@@ -10,17 +10,29 @@ use super::pellet::Pellet;
 use super::snake::Snake;
 use super::view::View;
 
-static FIELD_SIZE: f32 = 10000.0;
+pub(crate) const FIELD_SIZE: f32 = 10000.0;
 const MAX_PELLET_COUNT: usize = 5_000;
 const MAP_SIZE: usize = 100;
 const PELLET_CELL_SIZE: f32 = 100.0;
 const PELLET_GRID_SIZE: usize = (FIELD_SIZE / PELLET_CELL_SIZE) as usize;
 
 pub struct GameEngine {
-    frame_count: u32,
-    snakes: HashMap<Uuid, Snake>,
-    pellets: HashMap<Uuid, Pellet>,
-    pellet_grid: Vec<Vec<Uuid>>,
+    pub(crate) frame_count: u32,
+    pub(crate) snakes: HashMap<Uuid, Snake>,
+    pub(crate) pellets: HashMap<Uuid, Pellet>,
+    pub(crate) pellet_grid: Vec<Vec<Uuid>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeathEvent {
+    pub id: Uuid,
+    pub score: usize,
+}
+
+#[derive(Default)]
+pub struct FrameEvents {
+    pub deaths: Vec<DeathEvent>,
+    pub pellets_eaten: HashMap<Uuid, usize>,
 }
 
 impl Default for GameEngine {
@@ -73,12 +85,20 @@ impl GameEngine {
         Some(pellet)
     }
 
-    fn nearby_pellet_ids(pellet_grid: &[Vec<Uuid>], position: &Coordinate) -> Vec<Uuid> {
+    pub(crate) fn nearby_pellet_ids(pellet_grid: &[Vec<Uuid>], position: &Coordinate) -> Vec<Uuid> {
+        Self::nearby_pellet_ids_with_radius(pellet_grid, position, 1)
+    }
+
+    pub(crate) fn nearby_pellet_ids_with_radius(
+        pellet_grid: &[Vec<Uuid>],
+        position: &Coordinate,
+        radius: isize,
+    ) -> Vec<Uuid> {
         let (center_x, center_y) = Self::pellet_cell(position);
         let mut ids = Vec::new();
 
-        for dx in -1..=1 {
-            for dy in -1..=1 {
+        for dx in -radius..=radius {
+            for dy in -radius..=radius {
                 let x = (center_x as isize + dx).rem_euclid(PELLET_GRID_SIZE as isize) as usize;
                 let y = (center_y as isize + dy).rem_euclid(PELLET_GRID_SIZE as isize) as usize;
                 ids.extend_from_slice(&pellet_grid[Self::pellet_cell_index(x, y)]);
@@ -118,9 +138,17 @@ impl GameEngine {
         self.snakes.get_mut(id)
     }
 
+    pub fn score(&self, id: &Uuid) -> Option<usize> {
+        self.snakes.get(id).map(|snake| snake.bodies.len())
+    }
+
     pub fn add_snake(&mut self, id: Uuid) {
         let snake: Snake = Snake::new(self.get_random_coordinate(), 5.0);
         self.snakes.insert(id, snake);
+    }
+
+    pub fn add_snake_at(&mut self, id: Uuid, position: Coordinate) {
+        self.snakes.insert(id, Snake::new(position, 5.0));
     }
 
     pub fn remove_snake(&mut self, id: &Uuid) {
@@ -176,13 +204,14 @@ impl GameEngine {
         }
     }
 
-    pub fn forward(&mut self) {
+    pub fn forward(&mut self) -> FrameEvents {
         //! Forward one frame of the game.
 
+        let mut events = FrameEvents::default();
         let mut touched_pellets: HashSet<Uuid> = HashSet::new();
 
         // Update snakes
-        for (_, snake) in self.snakes.iter_mut() {
+        for (snake_id, snake) in self.snakes.iter_mut() {
             let mut accelerate_factor = 1.;
             snake.turn_towards_target();
 
@@ -244,6 +273,9 @@ impl GameEngine {
             for id in eaten_pellets.iter() {
                 Self::remove_pellet_from(&mut self.pellets, &mut self.pellet_grid, id);
             }
+            if !eaten_pellets.is_empty() {
+                events.pellets_eaten.insert(*snake_id, eaten_pellets.len());
+            }
 
             snake.size = (15 + snake.bodies.len() / 50).min(40);
         }
@@ -304,6 +336,9 @@ impl GameEngine {
         }
 
         for id in dead_snakes.iter() {
+            if let Some(score) = self.score(id) {
+                events.deaths.push(DeathEvent { id: *id, score });
+            }
             self.remove_snake(id)
         }
 
@@ -335,6 +370,7 @@ impl GameEngine {
             snake.frame_count_offset += 1;
         }
         self.frame_count += 1;
+        events
     }
 
     pub fn change_velocity(&mut self, id: &Uuid, velocity: Coordinate) {

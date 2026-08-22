@@ -1,3 +1,4 @@
+pub mod bot;
 pub mod coordinate;
 pub mod engine;
 pub mod map;

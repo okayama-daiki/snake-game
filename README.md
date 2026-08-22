@@ -76,6 +76,10 @@ bun install && bun run build
 bun run start
 ```
 
+The server starts six reinforcement-learning bots by default. Override the count with
+`BOT_COUNT` (for example, `BOT_COUNT=0 bun run start`). While playing, the leaderboard
+ranks every active snake by its current length.
+
 ## Tech Stack
 
 ### Frontend

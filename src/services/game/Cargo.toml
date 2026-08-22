@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 uuid = { version = "1.25.0", features = ["v4", "js"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 rand = "0.10.2"
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
 ciborium = "0.2.2"

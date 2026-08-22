@@ -12,4 +12,5 @@ actix-web-actors = "4.3.1"
 openssl = { version = "0.10.81", features = ["v110"] }
 uuid = { version = "1.25.0", features = ["v4"] }
 dotenvy = "0.15.7"
+serde = { version = "1.0.229", features = ["derive"] }
 game = { path = "../game" }
