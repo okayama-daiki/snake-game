@@ -434,22 +434,27 @@ impl GameEngine {
 
         // 1. Get snakes in the rectangle
         for (_, snake) in self.snakes.iter() {
-            let snake = snake.clone();
-            let mut bodies: VecDeque<Coordinate> = VecDeque::new();
-            for body in snake.bodies.iter() {
-                if body.is_in_rectangle(x0, y0, width, height) {
-                    bodies.push_back(Coordinate {
-                        x: (body.x - x0).rem_euclid(FIELD_SIZE),
-                        y: (body.y - y0).rem_euclid(FIELD_SIZE),
-                    });
-                }
-            }
+            let bodies: VecDeque<Coordinate> = snake
+                .bodies
+                .iter()
+                .filter(|body| body.is_in_rectangle(x0, y0, width, height))
+                .map(|body| Coordinate {
+                    x: (body.x - x0).rem_euclid(FIELD_SIZE),
+                    y: (body.y - y0).rem_euclid(FIELD_SIZE),
+                })
+                .collect();
             let is_visible_head = snake.bodies[0].is_in_rectangle(x0, y0, width, height);
             if !bodies.is_empty() {
                 snakes.push(Snake {
                     bodies,
+                    acceleration_time_left: snake.acceleration_time_left,
+                    speed: snake.speed,
+                    color: snake.color.clone(),
+                    velocity: snake.velocity,
+                    target_velocity: snake.target_velocity,
+                    size: snake.size,
+                    frame_count_offset: snake.frame_count_offset,
                     is_visible_head,
-                    ..snake
                 });
             }
         }
@@ -568,5 +573,45 @@ mod tests {
             GameEngine::nearby_pellet_ids(&engine.pellet_grid, &Coordinate { x: 5.0, y: 50.0 });
 
         assert!(nearby.contains(&pellet_id));
+    }
+
+    #[test]
+    fn view_copies_only_visible_bodies_and_preserves_snake_state() {
+        let mut engine = GameEngine::new();
+        let id = Uuid::new_v4();
+        engine.add_snake_at(id, Coordinate { x: 450.0, y: 450.0 });
+        let snake = engine.get_snake_mut(&id).unwrap();
+        snake.bodies = VecDeque::from([
+            Coordinate { x: 450.0, y: 450.0 },
+            Coordinate {
+                x: 1_000.0,
+                y: 1_000.0,
+            },
+        ]);
+        snake.acceleration_time_left = 42;
+        snake.speed = 7.0;
+        snake.color = "120".to_string();
+        snake.velocity = Coordinate { x: 1.0, y: 0.0 };
+        snake.target_velocity = Coordinate { x: 0.0, y: 1.0 };
+        snake.size = 25;
+        snake.frame_count_offset = 9;
+
+        let view = engine.view(&id, 500.0, 500.0, 200.0, 200.0);
+
+        assert!(view.is_alive);
+        assert_eq!(view.snakes.len(), 1);
+        let visible = &view.snakes[0];
+        assert_eq!(
+            visible.bodies,
+            VecDeque::from([Coordinate { x: 50.0, y: 50.0 }])
+        );
+        assert_eq!(visible.acceleration_time_left, 42);
+        assert_eq!(visible.speed, 7.0);
+        assert_eq!(visible.color, "120");
+        assert_eq!(visible.velocity, Coordinate { x: 1.0, y: 0.0 });
+        assert_eq!(visible.target_velocity, Coordinate { x: 0.0, y: 1.0 });
+        assert_eq!(visible.size, 25);
+        assert_eq!(visible.frame_count_offset, 9);
+        assert!(visible.is_visible_head);
     }
 }
