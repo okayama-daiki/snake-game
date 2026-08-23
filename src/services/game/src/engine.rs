@@ -11,7 +11,7 @@ use super::snake::Snake;
 use super::view::View;
 
 pub(crate) const FIELD_SIZE: f32 = 10000.0;
-const MAX_PELLET_COUNT: usize = 5_000;
+const MIN_PELLET_COUNT: usize = 5_000;
 const MAP_SIZE: usize = 100;
 const PELLET_CELL_SIZE: f32 = 100.0;
 const PELLET_GRID_SIZE: usize = (FIELD_SIZE / PELLET_CELL_SIZE) as usize;
@@ -191,7 +191,7 @@ impl GameEngine {
     }
 
     fn fill_pellet(&mut self) {
-        while self.pellets.len() < MAX_PELLET_COUNT {
+        while self.pellets.len() < MIN_PELLET_COUNT {
             let new_pellet = Pellet::new(self.get_random_coordinate());
             let id = Uuid::new_v4();
             Self::insert_pellet_into(
