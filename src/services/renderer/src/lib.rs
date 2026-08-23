@@ -51,6 +51,18 @@ struct BodySprite {
     center: f64,
 }
 
+#[derive(Eq, Hash, PartialEq)]
+struct PelletBatchKey {
+    fill_style: String,
+    radius_bits: u64,
+}
+
+struct PelletBatch {
+    fill_style: String,
+    radius: f64,
+    positions: Vec<Coordinate>,
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct BodySpriteKey {
     color: String,
@@ -536,23 +548,51 @@ fn wrapped_delta(value: f32, origin: f32, period: f32) -> f32 {
     (value - origin + period / 2.0).rem_euclid(period) - period / 2.0
 }
 
-fn render_pellets(context: &CanvasRenderingContext2d, pellets: &Vec<Pellet>) {
+fn render_pellets(context: &CanvasRenderingContext2d, pellets: &[Pellet]) {
     context.set_shadow_blur(0.0);
-    for pellet in pellets {
-        let hsl = pellet_rendering_helper::to_hsl(pellet);
-        context.set_fill_style_str(hsl.as_str());
+    for batch in pellet_batches(pellets) {
+        context.set_fill_style_str(&batch.fill_style);
         context.begin_path();
-        context
-            .arc(
-                pellet.position.x as f64,
-                pellet.position.y as f64,
-                pellet_rendering_helper::to_radius(pellet),
-                0.0,
-                std::f64::consts::PI * 2.0,
-            )
-            .unwrap();
+        for position in batch.positions {
+            context.move_to(position.x as f64 + batch.radius, position.y as f64);
+            context
+                .arc(
+                    position.x as f64,
+                    position.y as f64,
+                    batch.radius,
+                    0.0,
+                    std::f64::consts::PI * 2.0,
+                )
+                .unwrap();
+        }
         context.fill();
     }
+}
+
+fn pellet_batches(pellets: &[Pellet]) -> Vec<PelletBatch> {
+    let mut batch_indices = HashMap::new();
+    let mut batches: Vec<PelletBatch> = Vec::new();
+
+    for pellet in pellets {
+        let fill_style = pellet_rendering_helper::to_hsl(pellet);
+        let radius = pellet_rendering_helper::to_radius(pellet);
+        let key = PelletBatchKey {
+            fill_style: fill_style.clone(),
+            radius_bits: radius.to_bits(),
+        };
+        let batch_index = *batch_indices.entry(key).or_insert_with(|| {
+            let index = batches.len();
+            batches.push(PelletBatch {
+                fill_style,
+                radius,
+                positions: Vec::new(),
+            });
+            index
+        });
+        batches[batch_index].positions.push(pellet.position);
+    }
+
+    batches
 }
 
 fn render_snakes(
@@ -1027,6 +1067,40 @@ mod tests {
         assert_ne!(first, different_blur);
         assert!((first.radius() - 15.0).abs() < f64::EPSILON);
         assert!((first.blur() - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn pellets_with_identical_rendering_share_a_batch() {
+        let pellet = |position, size, frame_count_offset| Pellet {
+            center: position,
+            radius: 0.0,
+            position,
+            size,
+            color: "120".to_string(),
+            frame_count_offset,
+        };
+        let pellets = vec![
+            pellet(Coordinate { x: 10.0, y: 20.0 }, 3, 10),
+            pellet(Coordinate { x: 30.0, y: 40.0 }, 3, 10),
+            pellet(Coordinate { x: 50.0, y: 60.0 }, 3, 11),
+            pellet(Coordinate { x: 70.0, y: 80.0 }, 2, 10),
+        ];
+
+        let batches = pellet_batches(&pellets);
+
+        assert_eq!(batches.len(), 3);
+        assert_eq!(
+            batches[0].positions,
+            pellets[..2].iter().map(|p| p.position).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            batches[0].fill_style,
+            pellet_rendering_helper::to_hsl(&pellets[0])
+        );
+        assert_eq!(
+            batches[0].radius,
+            pellet_rendering_helper::to_radius(&pellets[0])
+        );
     }
 
     #[test]
